@@ -1,22 +1,34 @@
+/*
+ * @Author: your name
+ * @Date: 2020-05-27 21:33:48
+ * @LastEditTime: 2020-05-27 22:01:52
+ * @LastEditors: Please set LastEditors
+ * @Description: In User Settings Edit
+ * @FilePath: /LearnVIO/camera/pinhole_camera.h
+ */ 
 #pragma once
 
 #include <memory>
 #include "camera_base.h"
 
-class PinholeCamera: virtual public CameraBase {
+class PinholeCamera: virtual public CameraModel {
     protected:
         float fx_, fy_, cx_, cy_;
-        float d0_, d1_, d2_, d3_;
+        float d0_, d1_, d2_, d3_, d4_;
 
         Eigen::Matrix3f K_, invK_;
-        Eigen::Matrix<float, 1, 4> D_;
+        Eigen::Matrix<float, 1, 5> D_;
 
-        bool mUseDistort;
+        cv::Mat cvK_;
+        cv::Mat cvinvK_;
+        cv::Mat cvD_;
+
+        bool use_distort;
 
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-        PinholeCamera(int width, int height, float fx, float fy, float cx, float cy, 
+        PinholeCamera(int width, int height, string name, float fx, float fy, float cx, float cy, 
                       float d0=0, float d1=0, float d2=0, float d3=0, float d4=0);
         virtual ~PinholeCamera();
 
@@ -38,9 +50,11 @@ class PinholeCamera: virtual public CameraBase {
 
         const Matrix3f& invK() const { return invK_; }
 
+        const cv::Mat& cvK()    const { return cvK_;    }
+
+        const cv::Mat& cvinvK() const { return cvinvK_; }
+
         int initUnistortionMap();
 
         int undistortImage(const cv::Mat& raw, cv::Mat& rectified);
-};;
-
-typedef shared_ptr<PinholeCamera> PinholeCameraPtr;
+};

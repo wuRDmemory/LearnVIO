@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 17:32:19
- * @LastEditTime: 2020-05-24 18:13:30
+ * @LastEditTime: 2020-05-27 22:31:38
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /LearnVIO/include/LearnVIO/config.h
@@ -15,6 +15,7 @@
 
 using namespace std;
 
+extern string CONFIG_PATH;
 extern string IMAGE_TOPIC;
 extern string IMU_TOPIC;
 extern vector<string> CAM_NAMES;

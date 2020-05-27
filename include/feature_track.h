@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 21:31:12
- * @LastEditTime: 2020-05-25 23:01:37
+ * @LastEditTime: 2020-05-27 21:55:42
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Editin
  * @FilePath: /LearnVIO/include/feature_track.h
@@ -19,6 +19,7 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/Dense"
 
+#include "../camera/camera_base.h"
 
 using namespace std;
 using namespace cv;
@@ -45,6 +46,8 @@ public:
     
     vector<int> ids_;
     vector<int> track_cnt_;
+
+    CameraModelPtr camera_;
 
 public:
     FeatureTrack();

@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 18:11:47
- * @LastEditTime: 2020-05-24 21:22:36
+ * @LastEditTime: 2020-05-27 22:31:10
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /LearnVIO/src/config.cc
@@ -9,10 +9,12 @@
 #include "../include/config.h"
 #include "opencv2/opencv.hpp"
 
+string CONFIG_PATH;
 string IMAGE_TOPIC;
 string IMU_TOPIC;
 vector<string> CAM_NAMES;
 string FISHEYE_MASK;
+
 int MAX_CNT;
 int MIN_DIST;
 int WINDOW_SIZE;
@@ -47,6 +49,8 @@ void readParameters(ros::NodeHandle& n) {
     string vins_folder_path;
     config_file_path = getParameter<string>(n, "config_file");
     vins_folder_path = getParameter<string>(n, "vins_folder");
+
+    CONFIG_PATH = config_file_path;
     
     // load config file
     cv::FileStorage fs;

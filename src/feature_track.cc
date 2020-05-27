@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 21:40:20
- * @LastEditTime: 2020-05-25 22:59:34
+ * @LastEditTime: 2020-05-27 22:43:29
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /LearnVIO/src/feature_track.cc
@@ -17,6 +17,8 @@ FeatureTrack::FeatureTrack() {
     ids_.clear();
     curr_pts_.clear();
     prev_pts_.clear();
+
+    camera_ = NULL;
 }
 
 void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
@@ -45,6 +47,10 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
     
     // frequency control here
     if (PUB_THIS_FRAME) {
+        // use fundamental matrix filte some oulier
+        rejectWithF();
+
+        // set the mask and get some new key points
         
     }
 
@@ -77,36 +83,39 @@ void FeatureTrack::reduceVector(vector<T>& vec, vector<uchar>& status) {
 
 void FeatureTrack::rejectWithF() {
     if (curr_pts_.size() > 8)  {
-        ROS_DEBUG("FM ransac begin!!!");
+        ROS_DEBUG("[reject] FM ransac begin!!!");
         Tick tick;
         
         // convert point in image to normalized plane
         vector<cv::Point2f> un_prev_pts(prev_pts_.size());
         vector<cv::Point2f> un_curr_pts(curr_pts_.size());
 
+        Vector3f Pc;
         for (int i = 0; i < curr_pts_.size(); i++) {
-            Eigen::Vector3d tmp_p;
-            m_camera->liftProjective(Eigen::Vector2d(cur_pts[i].x, cur_pts[i].y), tmp_p);
-            tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
-            tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
-            un_cur_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
 
-            m_camera->liftProjective(Eigen::Vector2d(forw_pts[i].x, forw_pts[i].y), tmp_p);
-            tmp_p.x() = FOCAL_LENGTH * tmp_p.x() / tmp_p.z() + COL / 2.0;
-            tmp_p.y() = FOCAL_LENGTH * tmp_p.y() / tmp_p.z() + ROW / 2.0;
-            un_forw_pts[i] = cv::Point2f(tmp_p.x(), tmp_p.y());
+            Pc = camera_->cam2world(prev_pts_[i].x, prev_pts_[i].y);
+            Pc.x() = FOCAL_LENGTH * Pc.x() / Pc.z() + COL / 2.0;
+            Pc.y() = FOCAL_LENGTH * Pc.y() / Pc.z() + ROW / 2.0;
+            prev_un_pts_[i] = cv::Point2f(Pc.x(), Pc.y());
+
+            Pc = camera_->cam2world(curr_pts_[i].x, curr_pts_[i].y);
+            Pc.x() = FOCAL_LENGTH * Pc.x() / Pc.z() + COL / 2.0;
+            Pc.y() = FOCAL_LENGTH * Pc.y() / Pc.z() + ROW / 2.0;
+            curr_un_pts_[i] = cv::Point2f(Pc.x(), Pc.y());
         }
-
+        
         vector<uchar> status;
-        cv::findFundamentalMat(un_cur_pts, un_forw_pts, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
-        int size_a = cur_pts.size();
-        reduceVector(prev_pts, status);
-        reduceVector(cur_pts, status);
-        reduceVector(forw_pts, status);
-        reduceVector(cur_un_pts, status);
-        reduceVector(ids, status);
-        reduceVector(track_cnt, status);
-        ROS_DEBUG("FM ransac: %d -> %lu: %f", size_a, forw_pts.size(), 1.0 * forw_pts.size() / size_a);
-        ROS_DEBUG("FM ransac costs: %fms", t_f.toc());
+        cv::findFundamentalMat(prev_un_pts_, curr_un_pts_, cv::FM_RANSAC, F_THRESHOLD, 0.99, status);
+        
+        int size_a = curr_pts_.size();
+        reduceVector(prev_pts_,    status);
+        reduceVector(curr_pts_,    status);
+        reduceVector(curr_un_pts_, status);
+        reduceVector(prev_un_pts_, status);
+        reduceVector(ids_,         status);
+        reduceVector(track_cnt_,   status);
+
+        ROS_DEBUG("[reject] FM ransac: %d -> %lu: %f", size_a, curr_pts_.size(), 1.0 * curr_pts_.size() / size_a);
+        ROS_DEBUG("[reject] FM ransac costs: %lf ms", tick.delta_time());
     }
 }
