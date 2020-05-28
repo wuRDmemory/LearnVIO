@@ -12,6 +12,8 @@
 #include <message_filters/subscriber.h>
 
 #include "include/config.h"
+#include "include/tick.h"
+#include "include/feature_track.h"
 
 using namespace std;
 
@@ -30,6 +32,8 @@ bool   init_pub         = 0;
 double last_image_time  = 0;
 double first_image_time = 0;
 
+FeatureTrack tracker;
+
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
     
     if(first_image_flag) {
@@ -38,6 +42,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
         last_image_time  = img_msg->header.stamp.toSec();
         return;
     }
+
     // detect unstable camera stream
     if (   img_msg->header.stamp.toSec() - last_image_time > 1.0 
         || img_msg->header.stamp.toSec() < last_image_time) {
@@ -85,36 +90,12 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
 
     cv::Mat show_img = ptr->image;
     
-    for (int i = 0; i < 1; i++)
-    {
-        ROS_DEBUG("processing camera %d", i);
-        if (i != 1 || !STEREO_TRACK)
-            trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)), img_msg->header.stamp.toSec());
-        else
-        {
-            if (EQUALIZE)
-            {
-                cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-                clahe->apply(ptr->image.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
-            }
-            else
-                trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i + 1));
-        }
+    ROS_DEBUG("[read image] processing camera");
+    tracker.readImage(ptr->image.rowRange(0, ROW), img_msg->header.stamp.toSec());
 
 #if SHOW_UNDISTORTION
-        trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
+    trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
 #endif
-    }
-
-    for (unsigned int i = 0;; i++)
-    {
-        bool completed = false;
-        for (int j = 0; j < NUM_OF_CAM; j++)
-            if (j != 1 || !STEREO_TRACK)
-                completed |= trackerData[j].updateID(i);
-        if (!completed)
-            break;
-    }
 
    if (PUB_THIS_FRAME)
    {
@@ -128,50 +109,53 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
 
         feature_points->header = img_msg->header;
         feature_points->header.frame_id = "world";
+        
+        // publish 
+        auto& curr_un_pts = tracker.prev_un_pts_;
+        auto& curr_pts    = tracker.prev_pts_;
+        auto& curr_ids    = tracker.ids_;
+        auto& curr_velocity  = tracker.pts_velocity_;
+        auto& curr_track_cnt = tracker.track_cnt_;
 
-        vector<set<int>> hash_ids(NUM_OF_CAM);
-        for (int i = 0; i < NUM_OF_CAM; i++)
-        {
-            auto &un_pts = trackerData[i].cur_un_pts;
-            auto &cur_pts = trackerData[i].cur_pts;
-            auto &ids = trackerData[i].ids;
-            auto &pts_velocity = trackerData[i].pts_velocity;
-            for (unsigned int j = 0; j < ids.size(); j++)
-            {
-                if (trackerData[i].track_cnt[j] > 1)
-                {
-                    int p_id = ids[j];
-                    hash_ids[i].insert(p_id);
-                    geometry_msgs::Point32 p;
-                    p.x = un_pts[j].x;
-                    p.y = un_pts[j].y;
-                    p.z = 1;
+        for (int j = 0; j < curr_ids.size(); j++) {
+            if (curr_track_cnt[j] > 1) {
+                int p_id = curr_ids[j];
 
-                    feature_points->points.push_back(p);
-                    id_of_point.values.push_back(p_id * NUM_OF_CAM + i);
-                    u_of_point.values.push_back(cur_pts[j].x);
-                    v_of_point.values.push_back(cur_pts[j].y);
-                    velocity_x_of_point.values.push_back(pts_velocity[j].x);
-                    velocity_y_of_point.values.push_back(pts_velocity[j].y);
-                }
+                geometry_msgs::Point32 p;
+                p.x = curr_un_pts[j].x;
+                p.y = curr_un_pts[j].y;
+                p.z = 1;
+
+                feature_points->points.push_back(p);
+                id_of_point.values.push_back(p_id);
+
+                u_of_point.values.push_back(curr_pts[j].x);
+                v_of_point.values.push_back(curr_pts[j].y);
+
+                velocity_x_of_point.values.push_back(pts_velocity[j].x);
+                velocity_y_of_point.values.push_back(pts_velocity[j].y);
             }
         }
+
         feature_points->channels.push_back(id_of_point);
         feature_points->channels.push_back(u_of_point);
         feature_points->channels.push_back(v_of_point);
         feature_points->channels.push_back(velocity_x_of_point);
         feature_points->channels.push_back(velocity_y_of_point);
         ROS_DEBUG("publish %f, at %f", feature_points->header.stamp.toSec(), ros::Time::now().toSec());
+
         // skip the first image; since no optical speed on frist image
-        if (!init_pub)
-        {
+        if (!init_pub) {
             init_pub = 1;
         }
-        else
+        else {
             pub_img.publish(feature_points);
+        }
 
-        if (SHOW_TRACK)
-        {
+        // add new when published current tracked features
+        tracker.addPoints();
+
+        if (SHOW_TRACK) {
             ptr = cv_bridge::cvtColor(ptr, sensor_msgs::image_encodings::BGR8);
             //cv::Mat stereo_img(ROW * NUM_OF_CAM, COL, CV_8UC3);
             cv::Mat stereo_img = ptr->image;
@@ -246,3 +230,5 @@ int main(int argc, char **argv) {
     ros::spin();
     return 0;
 }
+
+
