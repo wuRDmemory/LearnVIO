@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(LearnVIO)
+project(learn_vio)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -39,9 +39,15 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(/usr/include/eigen3/)
 
 # header
+include_directories(${PROJECT_SOURCE_DIR}/include/)
+include_directories(${PROJECT_SOURCE_DIR}/camera/)
 
-add_executable(feature_track_node feature_track_node.cc)
-target_link_libraries(feature_track_node ${catkin_LIBRARIES})
+# source
+file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cc)
+file(GLOB CMR_FILES ${PROJECT_SOURCE_DIR}/camera/*.cc)
+
+add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${CMR_FILES})
+target_link_libraries(feature_track_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 #############
 ## Install ##

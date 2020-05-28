@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 18:11:47
- * @LastEditTime: 2020-05-27 22:31:10
+ * @LastEditTime: 2020-05-28 22:42:41
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /LearnVIO/src/config.cc
@@ -36,7 +36,7 @@ T getParameter(ros::NodeHandle& n, string name) {
         ROS_INFO_STREAM("load parameter " << name << " : " << ans);
     }
     else {
-        ROS_ERROR("CAN NOT LOAD PARAMETER: " << name);
+        ROS_ERROR_STREAM("CAN NOT LOAD PARAMETER: " << name);
         n.shutdown();
     }
 
