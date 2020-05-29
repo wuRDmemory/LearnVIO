@@ -114,8 +114,8 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
         feature_points->header.frame_id = "world";
         
         // publish 
-        auto& curr_un_pts = tracker.prev_un_pts_;
-        auto& curr_pts    = tracker.prev_pts_;
+        auto& curr_un_pts = tracker.curr_un_pts_;
+        auto& curr_pts    = tracker.curr_pts_;
         auto& curr_ids    = tracker.ids_;
         auto& curr_velocity  = tracker.pts_velocity_;
         auto& curr_track_cnt = tracker.track_cnt_;
@@ -160,11 +160,12 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
 
         if (SHOW_TRACK) {
             cv::Mat show_image;
-            cv::cvtColor(image, show_image, CV_GRAY2RGB);
+            cv::cvtColor(image, show_image, cv::COLOR_GRAY2RGB);
 
-            for (unsigned int j = 0; j < tracker.curr_pts_.size(); j++) {
-                double len = std::min(1.0, 1.0 * tracker.track_cnt_[j] / WINDOW_SIZE);
-                cv::circle(show_image, tracker.curr_pts_[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
+            for (int j = 0; j < tracker.curr_pts_.size(); j++) {
+                
+                double len = std::min(1.0, (1.0*tracker.track_cnt_[j])/WINDOW_SIZE);
+                cv::circle(show_image, tracker.curr_pts_[j], 2, cv::Scalar(255*(1-len), 0, 255*len), 2);
                 //draw speed line
                 /*
                 Vector2d tmp_cur_un_pts (trackerData[i].cur_un_pts[j].x, trackerData[i].cur_un_pts[j].y);
@@ -186,6 +187,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
             pub_match.publish(ptr->toImageMsg());
         }
     }
+    ROS_INFO("------------------------");
     
 }
 
@@ -193,7 +195,7 @@ int main(int argc, char **argv) {
     
     ros::init(argc, argv, "feature_tracker");
     ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     readParameters(n);
 
     camera = CameraFactory::buildModuleFromConfigFile(CONFIG_PATH);

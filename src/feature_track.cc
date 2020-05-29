@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 21:40:20
- * @LastEditTime: 2020-05-28 13:32:12
+ * @LastEditTime: 2020-05-29 11:23:07
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Edit
  * @FilePath: /LearnVIO/src/feature_track.cc
@@ -29,21 +29,27 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
     curr_image_ = image.clone();
     curr_timestamp_  = timestamp;
 
-    if (!curr_pts_.empty()) {
+    if (!prev_pts_.empty()) {
         curr_pts_.clear();
 
         vector<uchar> status;
         vector<float> error;
         cv::calcOpticalFlowPyrLK(prev_image_, curr_image_, prev_pts_, curr_pts_, status, error);
 
-        for (int i = 0; i < (int)status.size(); i++)
-        if  (status[i] && !isVisable(curr_pts_[i]))
-            status[i] = 0;
+        int track_num = 0;
+        for (int i = 0; i < (int)status.size(); i++) {
+            if  (status[i] && !isVisable(curr_pts_[i])) {
+                status[i] = 0;
+            }
+            track_num += status[i];
+        }
         
         reduceVector(prev_pts_,  status);
         reduceVector(curr_pts_,  status);
         reduceVector(ids_,       status);
         reduceVector(track_cnt_, status);
+
+        ROS_DEBUG("[LK track] LK track %d done!", track_num);
     }
 
     // update track count
@@ -65,17 +71,18 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
             ROS_DEBUG("[read image] Begin fetch feature.");
             Tick tick;
             cv::goodFeaturesToTrack(curr_image_, pts_new_, N, 0.01, MIN_DIST, mask_);
-            ROS_DEBUG("[read image] Fetch feature done! %lf s", tick.delta_time());
+            ROS_DEBUG("[read image] Fetch feature %d done! %lf s", (int)pts_new_.size(), tick.delta_time());
         }
+    } else {
+        pts_new_.clear();
     }
 
     // undistort curr point
     undistortPoints();
 
     prev_image_     = curr_image_.clone();
-    prev_pts_       = move(curr_pts_);
-    prev_un_pts_    = move(curr_un_pts_);
-    prev_id_pts_    = move(curr_id_pts_);
+    prev_pts_       = curr_pts_;
+    prev_id_pts_    = curr_id_pts_;
     prev_timestamp_ = curr_timestamp_;
 }
 
@@ -130,7 +137,6 @@ void FeatureTrack::rejectWithF() {
         int size_a = curr_pts_.size();
         reduceVector(prev_pts_,    status);
         reduceVector(curr_pts_,    status);
-        reduceVector(curr_un_pts_, status);
         reduceVector(ids_,         status);
         reduceVector(track_cnt_,   status);
 
@@ -228,4 +234,5 @@ void FeatureTrack::addPoints() {
         track_cnt_.push_back(1);
         prev_pts_.push_back(pts_new_[i]);
     }
+    pts_new_.clear();
 }

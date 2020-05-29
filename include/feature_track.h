@@ -1,7 +1,7 @@
 /*
  * @Author: your name
  * @Date: 2020-05-24 21:31:12
- * @LastEditTime: 2020-05-28 13:31:38
+ * @LastEditTime: 2020-05-29 11:10:19
  * @LastEditors: Please set LastEditors
  * @Description: In User Settings Editin
  * @FilePath: /LearnVIO/include/feature_track.h
@@ -41,11 +41,9 @@ public:
     vector<Point2f> prev_pts_;
 
     vector<Point2f>    curr_un_pts_;
-    vector<Point2f>    prev_un_pts_;
     map<int, Point2f>  curr_id_pts_;
     map<int, Point2f>  prev_id_pts_;
 
-    
     vector<Point2f> pts_velocity_;
 
     vector<Point2f> pts_new_;
