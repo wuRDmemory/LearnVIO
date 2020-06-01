@@ -156,15 +156,19 @@ $$
 在VINS-Mono的代码中，作者使用的是中点法进行的，其实和参考2中的中点法不太一样，这里的中点法使用的是两端点的平均，下面进行简单的推导，先给出离散时间下的迭代步骤：
 $$
 \begin{cases}
-
+p_{k+1}=p_{k}+v_{k}\Delta{t}+\frac{1}{2}\frac{R_k(a_k-b_{ak})+R_{k+1}(a_{k+1}-b_{ak})}{2}\Delta{t}^2 \\
+v_{k+1}=v_k+\frac{R_k(a_k-b_k)+R_{k+1}(a_{k+1}-b_{k+1})}{2}\Delta{t}\\
+q_{k+1}=q_{k}\otimes q\{(\frac{(w_k+w_{k+1})}{2}-b_{wk})\Delta{t}\}\\
+b_{ak+1}=b_{ak}+n_{ba}\Delta{t} \\
+b_{wk+1}=b_{wk}+n_{bw}\Delta{t}
 \end{cases}
 $$
 
 
 
-
 #### 旋转的error-state
 
+这里先推导旋转的误差项是因为后面的位移和速度会用到这部分结论，整体来说和上面的ESKF一样，使用truth-state=normal-state+error-state的方法进行推导：
 $$
 
 $$
