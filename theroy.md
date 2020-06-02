@@ -153,7 +153,7 @@ $$
 
 ### VINS中的中点法（mid-point）
 
-在VINS-Mono的代码中，作者使用的是中点法进行的，其实和参考2中的中点法不太一样，这里的中点法使用的是两端点的平均，下面进行简单的推导，先给出离散时间下的迭代步骤：
+在VINS-Mono的代码中，作者使用的是中点法得到上面的公式4的，其实和参考【2】中的中点法不太一样，这里的中点法使用的是两端点的平均，下面进行简单的推导，先给出离散时间下的迭代步骤：
 $$
 \begin{cases}
 p_{k+1}=p_{k}+v_{k}\Delta{t}+\frac{1}{2}\frac{R_k(a_k-b_{ak})+R_{k+1}(a_{k+1}-b_{ak})}{2}\Delta{t}^2 \\
@@ -161,17 +161,147 @@ v_{k+1}=v_k+\frac{R_k(a_k-b_k)+R_{k+1}(a_{k+1}-b_{k+1})}{2}\Delta{t}\\
 q_{k+1}=q_{k}\otimes q\{(\frac{(w_k+w_{k+1})}{2}-b_{wk})\Delta{t}\}\\
 b_{ak+1}=b_{ak}+n_{ba}\Delta{t} \\
 b_{wk+1}=b_{wk}+n_{bw}\Delta{t}
-\end{cases}
+\end{cases}  \tag{8}
 $$
+
+
+
+整个过程中稍微有些奇怪的是VINS在表示陀螺仪的真值的时候，使用的是$w_t=w_m-b_w-\delta{b_w}+n_w$，不过因为噪声是高斯白噪声，加和减是一样的，所以这里按这样推导也无妨。
 
 
 
 #### 旋转的error-state
 
-这里先推导旋转的误差项是因为后面的位移和速度会用到这部分结论，整体来说和上面的ESKF一样，使用truth-state=normal-state+error-state的方法进行推导：
+这里先推导旋转的误差项是因为后面的位移和速度会用到这部分结论，整体来说和上面的ESKF一样，使用truth-state=normal-state+error-state的方法进行推导，这部分沿用微分的方式：
+$$
+\begin{aligned}
+\dot{q_{t}}&=\dot{(q\otimes \delta{q})}=\frac{1}{2}q_t\otimes \Omega_t \\
+&=\dot{q}\otimes \delta{q}+q \otimes \dot{\delta{q}}=\frac{1}{2}q_t\otimes \Omega_t \\
+&=\frac{1}{2}q \otimes \Omega \otimes \delta{q}+q\otimes \dot{\delta{q}}=\frac{1}{2}q\otimes\delta{q}\otimes \Omega_t \\
+&=[\Omega]_L\delta{q}+2\dot{\delta{q}} = [\Omega_t]_R \delta{q} \\
+&=2\dot{\delta{q}}  = ([\Omega_t]_R-[\Omega]_L)\delta{q}
+\end{aligned} \tag{9}
 $$
 
+下面对其中的一些符号进行说明：
+
+- $$
+  \delta{q}=\begin{bmatrix} 1 \\ \frac{1}{2}\delta{\theta} \end{bmatrix}
+  $$
+
+- $$
+  \begin{align}
+  [\Omega]_R&= \begin{bmatrix}0 & -\Omega^T \\ \Omega & -[\Omega]_{\times} \end{bmatrix} \\ 
+  [\Omega]_L&= \begin{bmatrix}0 & -\Omega^T \\ \Omega & [\Omega]_{\times} \end{bmatrix}
+  \end{align}
+  $$
+
+- $$
+  \begin{align}
+  \Omega  &=\frac{w^k_m+w^{k+1}_m}{2}-b^k_w \\
+  \Omega_t&=\frac{w^k_m+n^k_w+w^{k+1}_m+n^{k+1}_{w}}{2}-b^k_w-\delta{b^k_w}=\Omega-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} \\
+  \end{align}
+  $$
+
+至此，把上述的展开代入到公式9最后一行中中：
 $$
+\begin{align}
+\begin{bmatrix}0 \\ \dot{\delta{\theta}} \end{bmatrix}&=\begin{bmatrix}0 & -(\Omega_t-\Omega)^T \\ (\Omega_t-\Omega) & -([\Omega_t]_{\times}+[\Omega]_{\times}) \end{bmatrix} \begin{bmatrix}1 \\ \frac{1}{2}\delta{\theta}\end{bmatrix} \\
+&=\begin{bmatrix}0 & -(-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w})^T \\ 
+-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} &  -(2[\Omega]-[\delta{b^k_w}_{\times}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w}]_{\times})\end{bmatrix}\begin{bmatrix}1 \\ \frac{1}{2}\delta{\theta}\end{bmatrix} \\
+&=\begin{bmatrix}... \\ -[\Omega]_{\times}\delta{\theta}-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} \end{bmatrix} \\
+\dot{\delta{\theta}}&\rightarrow -[\Omega]_{\times}\delta{\theta}-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w}
+
+\end{align}  \tag{10}
+$$
+所以离散化之后：
+$$
+\delta{\theta}_{k+1}=\delta{\theta}_k-[\Omega]_{\times}\Delta{t} \delta{\theta}_k-\delta{b^k_w}\Delta{t}+\frac{1}{2}n^{k}_{w}\Delta{t}+\frac{1}{2}n^{k+1}_{w}\Delta{t} \tag{11}
+$$
+
+
+#### 位移的error-state
+
+取公式8中的位移迭代公式，并使用truth-state=normal-state+error-state的方法进行推导，有：
+$$
+\begin{align}
+p_{k+1}^{t}&=p_{k+1}+\delta{p_{k+1}}=p^{t}_{k}+v_{k}^t+\frac{1}{2}\frac{R_k^t(a_k^t-b_{ak}^t)+R_{k+1}^t(a_{k+1}^t-b_{ak}^t)}{2}\Delta{t}^2 \\
+&=p_{k+1}+\delta{p_{k+1}}=p_{k}+\delta{p_k}+(v_{k}+\delta{v_k})\Delta{t}+\frac{1}{2}\frac{R_k^t(a_k^t-b_{ak}^t)+R_{k+1}^t(a_{k+1}^t-b_{ak}^t)}{2}\Delta{t}^2 
+\end{align}
+$$
+把$p_{k+1}$的迭代公式代入之后有：
+$$
+\begin{align}
+\delta{p_{k+1}}&=\delta{p_k}+\delta{v_k}\Delta{t}+\frac{1}{4}\{[R_k^t(a_k^t-b_{ak}^t)- R_k(a_k-b_{ak})]+[R_{k+1}^t(a_{k+1}^t-b_{ak}^t)-R_{k+1}(a_{k+1}-b_{ak}]\}\Delta{t}^2
+\end{align} \tag{12}
+$$
+把后面的大括号中的部分设为E，单独拿出来化简，有：
+$$
+\begin{align}
+E&=R_kExp(\delta{\theta_k})(a_k-n^k_{a}-b_{ak}-\delta{b_{ak}})-R_k(a_k-b_{ak}) \\
+&+R_{k+1}Exp(\delta{\theta_{k+1}})(a_{k+1}-n^{k+1}_{a}-b_{ak+1}-\delta{b_{ak+1}})-R_k(a_{k+1}-b_{ak+1}) \\
+\\
+&=R_k(-\delta{b}_{ak}-n_{a}^k)+R_k[\delta{\theta_k}]_{\times}(a_k-n^k_{a}-b_{ak}-\delta{b_{ak}})\\
+&+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1})+R_{k+1}[\delta{\theta_{k+1}}]_{\times}(a_{k+1}-n^{k+1}_{a}-b_{ak+1}-\delta{b_{ak+1}}) \\
+\\
+&=R_k(-\delta{b}_{ak}-n_{a}^k)+R_{k}[\delta{\theta_k}]_{\times}(a_k-b_{ak})+O(||\delta{\theta_k}||^2)+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1}) \\
+&+R_{k+1}[\delta{\theta_{k+1}}]_{\times}(a_{k+1}-b_{ak+1})+O(||\delta{\theta_{k+1}}||^2) \\
+\\
+&\approx R_k(-\delta{b}_{ak}-n_{a}^k)+R_{k}[\delta{\theta_k}]_{\times}(a_k-b_{ak})\\
+&+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1})+R_{k+1}[\delta{\theta_{k+1}}]_{\times}(a_{k+1}-b_{ak+1}) \\
+\\
+&\approx R_k(-\delta{b}_{ak}-n_{a}^k)-R_{k}[a_k-b_{ak}]_{\times}\delta{\theta_k}\\
+&+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1})-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\delta{\theta_{k+1}}\\
+&\text{where equation(11)} \\ \\
+&\approx R_k(-\delta{b}_{ak}-n_{a}^k)-R_{k}[a_k-b_{ak}]_{\times}\delta{\theta_k}+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1})\\
+&-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}(\delta{\theta}_k-[\Omega]_{\times}\Delta{t} \delta{\theta}_k-\delta{b^k_w}\Delta{t}+\frac{1}{2}n^{k}_{w}\Delta{t}+\frac{1}{2}n^{k+1}_{w}\Delta{t}) \\
+\\
+&\approx R_k(-\delta{b}_{ak}-n_{a}^k)-R_{k}[a_k-b_{ak}]_{\times}\delta{\theta_k}+R_{k+1}(-\delta{b}_{ak+1}-n_{a}^{k+1})\\
+&-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}([I-[\Omega]_{\times}\Delta{t}]\delta{\theta}_k-\delta{b^k_w}\Delta{t}+\frac{1}{2}n^{k}_{w}\Delta{t}+\frac{1}{2}n^{k+1}_{w}\Delta{t}) \\
+&\text{where } \dot{\delta{b_a}}=0 \rightarrow \delta{b_{ak+1}}=\delta{b_{ak}} \\ \\
+
+&\approx \underbrace{-(R_k[a_k-b_{ak}]_{\times}+R_{k+1}[a_{k+1}-b_{ak}]_{\times}([I-[\Omega]_{\times}\Delta{t}])\delta{\theta}_k}_{\delta{\theta}}\\
+&+\underbrace{(-R_{k}+R_{k+1})\delta{b_{ak}}}_{b_{ak}}+\underbrace{(R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\Delta{t})\delta{b_{wk}}}_{b_{wk}}\\
+&+\underbrace{(-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\frac{1}{2}\Delta{t})n_{w}^k}_{n_{w}^k}+\underbrace{(-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\frac{1}{2}\Delta{t})n_{w}^{k+1}}_{n_{w}^{k+1}} \\
+&+\underbrace{(-R_{k})n_{a}^k}_{n_{a}^k}+\underbrace{(-R_{k+1})n_{a}^{k+1}}_{n_{a}^{k+1}}
+
+\end{align} \tag{13}
+$$
+把公式13的结论代入到公式12中，就可以得到关于位移的error-state的离散形势下的状态转移方程了。
+
+
+
+#### 速度的error-state
+
+和位移同理：
+$$
+\begin{align}
+\delta{v_{k+1}}&=\delta{v_k}+\{[R_k^t(a_k^t-b_{ak}^t)- R_k(a_k-b_{ak})]+[R_{k+1}^t(a_{k+1}^t-b_{ak}^t)-R_{k+1}(a_{k+1}-b_{ak}]\}\Delta{t}
+\end{align} \tag{14}
+$$
+可以看到，这次后面的部分和公式13是一模一样的，这里就不进行过多的推导了。
+
+
+
+#### 零偏Bias的error-state
+
+同样的方式有：
+$$
+\begin{align}
+b_{k+1}^t&=b_{k+1}+\delta{b_{k+1}}=b_{k}^t+n^t\Delta{t} \\
+&=b_{k}+n\Delta{t}+\delta{b_{k+1}}=b_{k}+\delta{b_k}+n^t\Delta{t} \\
+& \rightarrow \delta{b_{k+1}}=\delta{b_k}+\underbrace{(n^t-n)}_{n_b}\Delta{t} 
+\end{align} \tag{15}
+$$
+
+
+#### 整个状态转移方程的矩阵形式
+
+结合上述的公式（11）（12）（14）（15），可以得到最终的状态转移方程的矩阵形式为下图，相比于之前的欧拉法复杂了很多：
+
+![图2：状态转移方程](pictures/VIO2.png)
+
+
 
 
 
