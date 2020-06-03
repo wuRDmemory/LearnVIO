@@ -76,9 +76,50 @@ void imuCallBack(const sensor_msgs::ImuConstPtr &imu_msg) {
     }
 }
 
-vector<Data_Type>
-getMeasures() {    
+vector<Data_Type> getMeasures() {    
     vector<Data_Type> ret;
+    while (true) {
+        if (imu_buf.empty() || feature_buf.empty()) {
+            break;
+        }
+
+        // check timestamp of imu and feature
+        // 1. newest imu is early than oldest feature
+        //    IMU ts:      |----------|
+        //    feature ts:                |------|
+        if (imu_buf.back()->header.stamp.toSec() <= feature_buf.front()->header.stamp.toSec()) {
+            ROS_WARN("waiting for IMU data!");
+            break;
+        }
+
+        // 2. newest feature is early than oldest imu
+        //    IMU ts:                |-------|
+        //    feature ts:  |------|
+        if (feature_buf.back()->header.stamp.toSec() <= imu_buf.back()->header.stamp.toSec()) {
+            ROS_WARN("throw this feature frame!");
+            break;
+        }
+
+        // normal case
+        sensor_msgs::PointCloudConstPtr feature;
+        feature = feature_buf.front();
+        feature_buf.pop();
+
+        vector<sensor_msgs::ImuConstPtr> imus;
+        imus.reserve(10);
+        while (imu_buf.front()->header.stamp.toSec() < feature->header.stamp.toSec()) {
+            imus.push_back(imu_buf.front());
+            imu_buf.pop();
+        }
+        imus.push_back(imu_buf.front());
+        imu_buf.pop();
+
+        if (imus.empty()) {
+            ROS_WARN("IMU empty between two frame");
+        }
+
+        ret.push_back(make_pair(imus, feature));
+    }
 
     return ret;
 }
