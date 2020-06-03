@@ -332,6 +332,71 @@ $$
 
 3. 构建优化问题为：视觉帧间的相对姿态$q_{i+1}^i$与IMU积分相对姿态$r_{j+1}^j$的差的和最小，即：
    $$
-   E=||r_{i+1}^i||^2=||(\underbrace{q_i^{-1}\otimes q_{i+1}}_{visual})^{-1} \otimes \underbrace{r_{i}^{i+1}}_{IMU} ||^2
+   E=||e_{i+1}^i||^2=||(\underbrace{q_i^{-1}\otimes q_{i+1}}_{visual})^{-1} \otimes \underbrace{r_{i}^{i+1}}_{IMU} ||^2 \tag{16}
    $$
    
+
+针对公式16，下面构建最小二乘问题有：
+$$
+\begin{align}
+E=||e_{i+1}^{i}(b_w)||^2&=||\begin{bmatrix}1 \\ \phi(b_w) \end{bmatrix} ||^2 \text{ where } \phi=\frac{1}{2}\theta \\
+&=1+\phi(b_w)^T \phi(b_w)
+\end{align} \tag{17}
+$$
+取$\delta{b_w}$的扰动之后有：
+$$
+\begin{align}
+E=||e_{i+1}^{i}(b_w+\delta{b_w})||^2&=1+(\phi(b_w)+J\delta{b_w})^T(\phi(b_w)+J\delta{b_w}) \text{ where } J=\frac{\part\phi}{\part{b_w}}=\frac{\phi+\delta{\phi}-\phi}{\delta{b_w}}=\frac{1}{2}\frac{\delta{\theta}}{\delta{b_w}}=\frac{1}{2}J^{\theta}_{b_w} \\
+&=1+\phi(b_w)^T\phi(b_w)+\phi(b_w)^TJ\delta{b_w}+\delta{b_w}^TJ^T\phi(b_w)+\delta{b_w}^TJ^TJ\delta{b_w} \\
+\frac{\part{E}}{\part{\delta{b_w}}}=0 &\rightarrow J^T\phi(b_w)+J^TJ\delta{b_w}=0 \\
+& \rightarrow 2(J^{\theta}_{b_w})^T\phi(b_w)+(J^{\theta}_{b_w})^T(J^{\theta}_{b_w})\delta{b_w}=0 \\
+& \rightarrow \delta{b_w}=-((J^{\theta}_{b_w})^T(J^{\theta}_{b_w}))^{-1}(2(J^{\theta}_{b_w})^T\phi(b_w)) \tag{18}
+\end{align}
+$$
+这部分推导和代码中的基本上是一模一样了，这里简单贴一下代码：
+
+```c++
+void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
+{
+    Matrix3d A;
+    Vector3d b;
+    Vector3d delta_bg;
+    A.setZero();
+    b.setZero();
+    map<double, ImageFrame>::iterator frame_i;
+    map<double, ImageFrame>::iterator frame_j;
+    // 构建增量方程
+    for (frame_i = all_image_frame.begin(); next(frame_i) != all_image_frame.end(); frame_i++)
+    {
+        frame_j = next(frame_i);
+        MatrixXd tmp_A(3, 3);
+        tmp_A.setZero();
+        VectorXd tmp_b(3);
+        tmp_b.setZero();
+        Eigen::Quaterniond q_ij(frame_i->second.R.transpose() * frame_j->second.R);
+        tmp_A = frame_j->second.pre_integration->jacobian.template block<3, 3>(O_R, O_BG);
+        tmp_b = 2 * (frame_j->second.pre_integration->delta_q.inverse() * q_ij).vec();
+        A += tmp_A.transpose() * tmp_A;
+        b += tmp_A.transpose() * tmp_b;
+
+    }
+    
+    // 相当于对所有的状态求了一个公共的bias
+    // 个人认为初始化部分的时间较短，所有共享一个bias是没有问题的
+    delta_bg = A.ldlt().solve(b);
+    ROS_WARN_STREAM("gyroscope bias initial calibration " << delta_bg.transpose());
+
+    for (int i = 0; i <= WINDOW_SIZE; i++)
+        Bgs[i] += delta_bg;
+	
+    // 重新预积分
+    for (frame_i = all_image_frame.begin(); next(frame_i) != all_image_frame.end( ); frame_i++)
+    {
+        frame_j = next(frame_i);
+        frame_j->second.pre_integration->repropagate(Vector3d::Zero(), Bgs[0]);
+    }
+}
+```
+
+
+
