@@ -353,7 +353,7 @@ E=||e_{i+1}^{i}(b_w+\delta{b_w})||^2&=1+(\phi(b_w)+J\delta{b_w})^T(\phi(b_w)+J\d
 & \rightarrow \delta{b_w}=-((J^{\theta}_{b_w})^T(J^{\theta}_{b_w}))^{-1}(2(J^{\theta}_{b_w})^T\phi(b_w)) \tag{18}
 \end{align}
 $$
-这部分推导和代码中的基本上是一模一样了，这里简单贴一下代码：
+这部分推导和代码中的基本上是一模一样了，唯一需要特别注意的是代码中的$\phi$是IMU与visual的差，而这里的推导使用的是visual与IMU的差，所以差了一个负号（下面注释中的**注意1**），这里简单贴一下代码：
 
 ```c++
 void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
@@ -375,6 +375,7 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
         tmp_b.setZero();
         Eigen::Quaterniond q_ij(frame_i->second.R.transpose() * frame_j->second.R);
         tmp_A = frame_j->second.pre_integration->jacobian.template block<3, 3>(O_R, O_BG);
+        // 注意1. 这个地方是对IMU的预积分取转置，根据四元数的转置的性质，后面的所有的相关变量都多了个负号
         tmp_b = 2 * (frame_j->second.pre_integration->delta_q.inverse() * q_ij).vec();
         A += tmp_A.transpose() * tmp_A;
         b += tmp_A.transpose() * tmp_b;
