@@ -1,11 +1,3 @@
-/*
- * @Author: your name
- * @Date: 2020-05-24 21:40:20
- * @LastEditTime: 2020-05-29 11:23:07
- * @LastEditors: Please set LastEditors
- * @Description: In User Settings Edit
- * @FilePath: /LearnVIO/src/feature_track.cc
- */ 
 #include "ros/ros.h"
 #include "../include/feature_track.h"
 #include "../include/config.h"

@@ -26,12 +26,14 @@ using namespace Eigen;
 
 static bool first_feature = true;
 
+static double current_time = -1;
 static double last_imu_t = 0;
 
 static condition_variable con;
 static mutex imu_buf_lock;
 static mutex feature_lock;
 static mutex imu_state_lock;
+static mutex estimate_lock;
 
 static queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 static queue<sensor_msgs::ImuConstPtr>        imu_buf;
@@ -137,6 +139,57 @@ void process() {
         // already handle the imu buffer
         lock.unlock();
 
+        estimate_lock.lock();
+        for (Data_Type& measure : measures) {
+            auto feature = measure.second;
+            auto imus    = measure.first;
+
+            float feature_time = feature->header.stamp.toSec();            
+            float ax, ay, az, gx, gy, gz;
+            float dt;
+
+            for (auto& imu : imus) {
+                double t     = imu->header.stamp.toSec();
+                if (t <= feature_time) { 
+                    if (current_time < 0)
+                        current_time = t;
+
+                    double dt = t - current_time;
+                    ROS_ASSERT(dt >= 0);
+                    current_time = t;
+                    ax = imu->linear_acceleration.x;
+                    ay = imu->linear_acceleration.y;
+                    az = imu->linear_acceleration.z;
+                    gx = imu->angular_velocity.x;
+                    gy = imu->angular_velocity.y;
+                    gz = imu->angular_velocity.z;
+                    estimator.processIMU(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                    //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
+
+                }
+                else {
+                    // interpolation
+                    // for last imu data
+                    double dt_1 = feature_time - current_time;
+                    double dt_2 = t - feature_time;
+                    current_time = feature_time;
+
+                    ROS_ASSERT(dt_1 >= 0);
+                    ROS_ASSERT(dt_2 >= 0);
+                    ROS_ASSERT(dt_1 + dt_2 > 0);
+
+                    double w1 = dt_2 / (dt_1 + dt_2);
+                    double w2 = dt_1 / (dt_1 + dt_2);
+                    ax = w1 * ax + w2 * imu->linear_acceleration.x;
+                    ay = w1 * ay + w2 * imu->linear_acceleration.y;
+                    az = w1 * az + w2 * imu->linear_acceleration.z;
+                    gx = w1 * gx + w2 * imu->angular_velocity.x;
+                    gy = w1 * gy + w2 * imu->angular_velocity.y;
+                    gz = w1 * gz + w2 * imu->angular_velocity.z;
+                    estimator.processIMU(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                }
+            }
+        }
         
     }
 }
