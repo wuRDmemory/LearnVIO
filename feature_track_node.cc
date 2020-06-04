@@ -206,10 +206,7 @@ int main(int argc, char **argv) {
     pub_img     = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
     pub_match   = n.advertise<sensor_msgs::Image>("feature_img",1000);
     pub_restart = n.advertise<std_msgs::Bool>("restart",1000);
-    /*
-    if (SHOW_TRACK)
-        cv::namedWindow("vis", cv::WINDOW_NORMAL);
-    */
+
     ros::spin();
     return 0;
 }
