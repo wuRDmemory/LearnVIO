@@ -130,9 +130,9 @@ $$
 图中X表示使用IMU数据进行积分的过程，IMU认为在这段时间内，坐标系的变化为从$I_k$到$I_{k+1}$，而当状态变量进行了优化，零偏变化$\delta b$时，积分过程需要加上$\Delta X$，即假如零偏变化了$\delta b$，那么IMU认为坐标系的变化应该到$I^{'}_{k+1}$，所以剩下就是求解上图中的黄色部分的变化了，这里采用一阶近似来表示这个变化，推导如下：
 $$
 \begin{cases}
-p_t=p_{int}+\frac{\partial{p}}{\partial{b}}\delta{b}=p_{int}+\frac{p+\delta{p}-p}{\delta{b}}\delta{b}=p_{int}+\frac{\delta{p}}{\delta{b}}\delta{b} \\
-v_t=v_{int}+\frac{\part{v}}{\part{b}}\delta{b}=v_{int}+\frac{v+\delta{v}-v}{\delta{b}}\delta{b}=v_{int}+\frac{\delta{v}}{\delta{b}}\delta{b} \\
-q_t=q_{int}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{int}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{int}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\theta+\delta{\theta}-\theta}{\delta{b}}\delta{b} \end{bmatrix}=q_{int}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\delta{\theta}}{\delta{b}}\delta{b} \end{bmatrix}
+p_{nt}=p_{n}+\frac{\partial{p}}{\partial{b}}\delta{b}=p_{n}+\frac{p+\delta{p}-p}{\delta{b}}\delta{b}=p_{n}+\frac{\delta{p}}{\delta{b}}\delta{b} \\
+v_{nt}=v_{n}+\frac{\part{v}}{\part{b}}\delta{b}=v_{n}+\frac{v+\delta{v}-v}{\delta{b}}\delta{b}=v_{n}+\frac{\delta{v}}{\delta{b}}\delta{b} \\
+q_{nt}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\theta+\delta{\theta}-\theta}{\delta{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\delta{\theta}}{\delta{b}}\delta{b} \end{bmatrix}
 \end{cases}  \tag{6}
 $$
 
@@ -142,8 +142,10 @@ $$
 - 偏导这里采用了求导的原始定义；
 - 相对姿态使用四元数进行表示，这里使用旋转向量来表示误差量，这样的好处就是能在$\R^3$空间上直接进行向量的加减操作，十分方便；
 
-所以看到，公式6中的所有偏导数都变作了导数，其中$\frac{\delta{\theta}}{\delta{b}},\frac{\delta{p}}{\delta{b}}, \frac{\delta{v}}{\delta{b}}$都可以在预积分公式3中找到。
-
+剩下的就是如何求解上述推导中的$\frac{\delta{p}}{\delta{b}},\frac{\delta{v}}{\delta{b}},\frac{\delta{q}}{\delta{b}}$了，特别注意的这里的三个导数和公式4中的变量并不一样，因为公式（4）是两个IMU周期之间的递推公式，而公式（6）是两个相机周期（一般都是N倍于IMU周期）之间的递推公式，那这个数值是多少呢？这里其实是一个连乘的操作，如下：
+$$
+\frac{\delta{p_n}}{\delta{b}}=\frac{F_{n-1}\delta{p_{n-1}}}{\delta{b}}=\frac{F_{n-1}F_{n-2}\delta{p_{n-2}}}{\delta{b}}=\frac{\prod_{i=0}^{n-1}F_{i}\delta{p_0}}{\delta{b}}=\prod_{i=0}^{n-1}F_{i} \text{ where } \frac{\delta{p_{0}}}{\delta{b}}=I
+$$
 所以为什么要用ESKF也就很明显了，同时使用ESKF进行error-state状态的更新还有另一个好处就是能够得到这次观测的协方差，如何得到呢？其实也很简单，使用协方差的原始定义就好啦，这里以位置为例：
 $$
 P_p=E((p_t-p_{int})^T(p_t-p_{int}))=E(\delta{p}^T\delta{p})=P_{\delta{p}} \tag{7}
