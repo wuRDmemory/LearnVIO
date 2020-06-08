@@ -39,12 +39,10 @@ private:
     vector<Vector3f> accl_buf_;
     vector<Vector3f> gyro_buf_;
 
-    Vector3f accl_init_, gyro_init_;
-
     Vector3f accl_bias_, gyro_bias_;
 
-    Vector3f accl_0, gyro_0;
-    Vector3f accl_1, gyro_1;    
+    Vector3f accl_0_, gyro_0_;
+    Vector3f accl_1_, gyro_1_;    
 
     Vector3f    delta_p_;
     Vector3f    delta_v_;
@@ -73,15 +71,19 @@ public:
     PreIntegrate() = delete;
     PreIntegrate(const Vector3f& accl0,       const Vector3f& gyro0, 
                  const Vector3f& bias_accl,  const Vector3f& bias_gyro):
-                 accl_init_(accl0), gyro_init_(gyro0), accl_0(accl0), gyro_0(gyro0), 
-                 accl_bias_(bias_accl), gyro_bias_(bias_gyro), sum_dt_(0)
-                 {
+                 accl_0_(accl0),        gyro_0_(gyro0), 
+                 accl_bias_(bias_accl), gyro_bias_(bias_gyro), 
+                 sum_dt_(0) {
         delta_p_.setZero();
         delta_v_.setZero();
         delta_q_.setIdentity();
 
         Jacobian_.setIdentity();
         covariance_.setIdentity();
+
+        accl_buf_.push_back(accl0);
+        gyro_buf_.push_back(gyro0);
+        dt_buf_.push_back(0);
     }
     ~PreIntegrate();
 
@@ -92,14 +94,32 @@ public:
         accl_buf_.push_back(accl);
         gyro_buf_.push_back(gyro);
         integrate(dt, accl, gyro);
-
     }
 
+    void reintegrate(Vector3f accl_bias, Vector3f gyro_bias) {
+        sum_dt_ = 0;
 
+        // reset variables
+        Jacobian_.setIdentity();
+        covariance_.setIdentity();
+
+        delta_p_.setZero();
+        delta_v_.setZero();
+        delta_q_.setIdentity();
+
+        accl_bias_ = accl_bias;
+        gyro_bias_ = gyro_bias;
+
+        accl_0_ = accl_buf_[0];
+        gyro_0_ = gyro_buf_[0];
+        for (int i = 1; i < accl_buf_.size(); i++) {
+            integrate(dt_buf_[i], accl_buf_[i], gyro_buf_[i]);
+        }
+    }
 
     void integrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
-        accl_1 = accl;
-        gyro_1 = gyro;
+        accl_1_ = accl;
+        gyro_1_ = gyro;
         
         midPointIntegrate(dt, accl, gyro);
 
@@ -111,22 +131,24 @@ public:
         accl_bias_ = result_accl_bias_;
         gyro_bias_ = result_gyro_bias_;       
 
-        accl_0   = accl;
-        gyro_0   = gyro;
+        accl_0_ = accl;
+        gyro_0_ = gyro;
+
+        sum_dt_ += dt;
     }
 
 
     void midPointIntegrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
         const float dt2 = dt*dt;
         
-        Vector3f gyro_mid = (gyro_1+gyro_0)/2 - gyro_bias_;
+        Vector3f gyro_mid = (gyro_1_+gyro_0_)/2 - gyro_bias_;
         Vector3f gyro_mid_dt = gyro_mid*dt;
 
         Quaternionf q_k0 = delta_q_;
         Quaternionf q_k1 = q_k0 * vec2quat(gyro_mid_dt);
 
-        Vector3f accl_b0 = accl_0 - accl_bias_;
-        Vector3f accl_b1 = accl_1 - accl_bias_;
+        Vector3f accl_b0 = accl_0_ - accl_bias_;
+        Vector3f accl_b1 = accl_1_ - accl_bias_;
 
         Vector3f accl_k0 = q_k0*(accl_b0);
         Vector3f accl_k1 = q_k1*(accl_b1);
