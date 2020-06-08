@@ -1,11 +1,3 @@
-/*
- * @Author: your name
- * @Date: 2020-05-24 18:11:47
- * @LastEditTime: 2020-05-28 22:42:41
- * @LastEditors: Please set LastEditors
- * @Description: In User Settings Edit
- * @FilePath: /LearnVIO/src/config.cc
- */ 
 #include "../include/config.h"
 #include "opencv2/opencv.hpp"
 
@@ -28,6 +20,11 @@ int COL;
 int FOCAL_LENGTH;
 int FISHEYE;
 bool PUB_THIS_FRAME;
+
+float ACCL_N, GYRO_N;
+float ACCL_BIAS_N, GYRO_BIAS_N;
+
+
 
 template <typename T> 
 T getParameter(ros::NodeHandle& n, string name) {
@@ -75,6 +72,12 @@ void readParameters(ros::NodeHandle& n) {
     EQUALIZE    = fs["equalize"];
     FISHEYE     = fs["fisheye"];
 
+    ACCL_N      = fs["accl_noise"];
+    GYRO_N      = fs["gyro_noise"];
+    ACCL_BIAS_N = fs["accl_bias_noise"];
+    GYRO_BIAS_N = fs["gyro_bias_noise"];
+
+
     if (FISHEYE == 1)
         FISHEYE_MASK = vins_folder_path + "/config/fisheye_mask.jpg";
 
@@ -87,6 +90,8 @@ void readParameters(ros::NodeHandle& n) {
 
     if (FREQ == 0)
         FREQ = 100;
+
+    FEN_WINDOW_SIZE = 10;
 
     fs.release();
 }

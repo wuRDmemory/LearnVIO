@@ -34,4 +34,9 @@ extern int FOCAL_LENGTH;
 extern int FISHEYE;
 extern bool PUB_THIS_FRAME;
 
+extern float ACCL_N, GYRO_N;
+extern float ACCL_BIAS_N, GYRO_BIAS_N;
+
+extern int FEN_WINDOW_SIZE;
+
 void readParameters(ros::NodeHandle& n);

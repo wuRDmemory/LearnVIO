@@ -10,6 +10,7 @@
 #include "eigen3/Eigen/Dense"
 
 #include "../../include/utils.h"
+#include "../../include/config.h"
 
 using namespace std;
 using namespace cv;
@@ -29,7 +30,7 @@ using namespace Eigen;
 #define V_ONA1   6
 #define V_ONW1   9
 #define V_ONBA   12
-#define V_ONBW   15 
+#define V_ONBW   15
 
 class PreIntegrate {
 private:
@@ -62,7 +63,7 @@ private:
     Matrix<float, J_NUMS, J_NUMS>   covariance_;
 
     // noise
-    Matrix<float, J_NUMS, J_NOISE>  noise_;
+    Matrix<float, J_NOISE, J_NOISE>  noise_;
     
 
 public:
@@ -84,6 +85,16 @@ public:
         accl_buf_.push_back(accl0);
         gyro_buf_.push_back(gyro0);
         dt_buf_.push_back(0);
+
+        Matrix3f I   = Matrix3f::Identity();
+
+        noise_.setZero();
+        noise_.block<3, 3>(V_ONA0, V_ONA0) = (ACCL_N*ACCL_N)*I;
+        noise_.block<3, 3>(V_ONW0, V_ONW0) = (GYRO_N*GYRO_N)*I;
+        noise_.block<3, 3>(V_ONA1, V_ONA1) = (ACCL_N*ACCL_N)*I;
+        noise_.block<3, 3>(V_ONW1, V_ONW1) = (GYRO_N*GYRO_N)*I;
+        noise_.block<3, 3>(V_ONBA, V_ONBA) = (ACCL_BIAS_N*ACCL_BIAS_N)*I;
+        noise_.block<3, 3>(V_ONBW, V_ONBW) = (GYRO_BIAS_N*GYRO_BIAS_N)*I;
     }
     ~PreIntegrate();
 
