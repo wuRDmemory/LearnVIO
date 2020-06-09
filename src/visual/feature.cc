@@ -7,7 +7,7 @@ FeatureManager::FeatureManager() {
 }
 
 
-bool FeatureManager::addNewFeatures(const Image_Type& image_data, Frame* cur_frame, int window_size) {
+bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) {
     vector<int> track_ftr_ids;
     track_ftr_ids.reserve(100);
 
@@ -24,20 +24,19 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, Frame* cur_fra
 
         if (all_ftr_.count(id)) {
             // already exist
-            all_ftr_[id]->addFrame(f, uv, cur_frame);
+            all_ftr_[id]->addFrame(f, uv);
             track_ftr_ids.push_back(id);
         }
         else {
             // not exist
-            Feature* new_ftr = new Feature(feature_id++, f, uv, cur_frame);
+            Feature* new_ftr = new Feature(id, frame_id, f, uv);
         }
     }
 
     printf("[FM add ftr] track feature cnt : %d\n", track_ftr_ids.size());
 
-    if (window_size < 2 || track_ftr_ids.size() < 20) {
-        // new key frame
-        
+    if (frame_id < 2 || track_ftr_ids.size() < 20) {
+        // new key frame        
         return true;
     }
 
@@ -47,18 +46,25 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, Frame* cur_fra
         int       id = pr.first;
         Feature* ftr = pr.second;
 
-        if (   ftr->getRefFrameId()             <  window_size-2
-            && ftr->getRefFrameId()+ftr->size() >= window_size) {
+        if (   ftr->getRefFrameId()             <  frame_id-2
+            && ftr->getRefFrameId()+ftr->size() >= frame_id ) {
             
             parallax_num++;
         }
     }
 
     if (parallax_num == 0) {
-        // 
+        // not enough good feature in feature manager
+    }
+    else {
+        // enough good feature
+
     }
 
     return true;
 }
 
+float FeatureManager::computeParallax(Feature* ftr, int frame_id) {
+    
+}
 

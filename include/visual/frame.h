@@ -10,6 +10,8 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/Dense"
 
+#include "../inertial/preintegrate.h"
+
 using namespace std;
 using namespace cv;
 using namespace Eigen;
@@ -21,7 +23,6 @@ class Feature;
 // c: camera coordination
 class Frame {
 public:
-    static int id;
     int id_;
 
     Quaternionf Rwb_;
@@ -33,11 +34,20 @@ public:
 
     list<Feature*> vis_ftr_;
 
+    PreIntegrate* integration_;
+
 public:
-    Frame();
+    Frame() = delete;
+    Frame(int id);
     ~Frame();
 
+    Frame(const Frame& frame);
+
+    bool addFeature(Feature* ftr);
+
     bool removeFeature(Feature* ftr);    
+
+    bool integrate(double dt, const Vector3f& accl, const Vector3f& gyro);
 };
 
 typedef shared_ptr<Frame> FramePtr;

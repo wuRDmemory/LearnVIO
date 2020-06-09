@@ -21,8 +21,8 @@ typedef map<int, pair<int, vector<double> > > Image_Type;
 class Feature {
 public:
     int id_;
-
-    vector<Frame*>    vis_frames_;
+    int ref_frame_id_;
+    
     vector<Vector3f>  vis_fs_;
     vector<Vector2f>  vis_uv_;
 
@@ -30,52 +30,42 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
    
     Feature() = delete;
-    Feature(int id, Vector3f& f, Vector2f& uv, Frame* frame) {
+    Feature(int id, int ref_frame_id, Vector3f& f, Vector2f& uv) {
         id_ = id;
-        vis_frames_.push_back(frame);
+        ref_frame_id_ = ref_frame_id;
         vis_fs_.push_back(f);
         vis_uv_.push_back(uv);
     }
 
     int size() const {
-        return vis_frames_.size();
+        return vis_fs_.size();
     }
 
     int getRefFrameId() { 
-        return vis_frames_[0]->id_;   
+        return ref_frame_id_;   
     }
 
-    int getLastFrameId() {
-        return vis_frames_.back()->id_;
+    bool contains(int frame_id) {
+        if (frame_id < ref_frame_id_) return false;
+
+        return (frame_id - ref_frame_id_) < (int)vis_fs_.size();
     }
 
-    bool contains(const Frame* frame) {
-        int ref_id = vis_frames_[0]->id_;
-        int cur_id = frame->id_;
-
-        if (cur_id < ref_id) return false;
-
-        return (cur_id - ref_id) < (int)vis_frames_.size();
-    }
-
-    bool addFrame(const Vector3f& f, const Vector2f& uv, Frame* frame) {
-        vis_frames_.push_back(frame);
+    bool addFrame(const Vector3f& f, const Vector2f& uv) {
         vis_fs_.push_back(f);
         vis_uv_.push_back(uv);
 
         return true;
     }
 
-    bool removeFrame(Frame* frame) {
-        int j = -1;
-        for (int i = 0; i < vis_frames_.size(); i++) {
-            if (vis_frames_[i] == frame) {
-                j = i;
-                break;
-            }
+    bool removeFrame(int frame_id) {
+        int delta = frame_id - ref_frame_id_;
+
+        if (delta < vis_fs_.size()) {
+            return false;
         }
 
-        vis_frames_.erase(vis_frames_.begin()+j);
+        // TODO: how to remove it
         return true;
     }
 };
@@ -92,5 +82,7 @@ public:
     FeatureManager();
     ~FeatureManager();
 
-    bool addNewFeatures(const Image_Type& image_data, Frame* cur_frame, int window_size);
+    bool addNewFeatures(const Image_Type& image_data, int frame_id);
+
+    float computeParallax(Feature* ftr, int frame_id);
 };
