@@ -40,7 +40,10 @@ include_directories(/usr/include/eigen3/)
 
 # header
 include_directories(${PROJECT_SOURCE_DIR}/include/)
+include_directories(${PROJECT_SOURCE_DIR}/include/inertial/)
+include_directories(${PROJECT_SOURCE_DIR}/include/visual/)
 include_directories(${PROJECT_SOURCE_DIR}/camera/)
+
 
 # source
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cc)

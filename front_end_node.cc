@@ -189,6 +189,28 @@ void process() {
                     estimator.processIMU(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
                 }
             }
+
+            Tick tick;
+            map<int, vector<pair<int, vector<double> > > > image;
+            for (unsigned int i = 0; i < feature->points.size(); i++) {
+                int feature_id = feature->channels[0].values[i];
+                
+                vector<double> data(7, 0);
+                data[0] = feature->points[i].x;
+                data[1] = feature->points[i].y;
+                data[2] = feature->points[i].z;
+                data[3] = feature->channels[1].values[i];
+                data[4] = feature->channels[2].values[i];
+                data[5] = feature->channels[3].values[i];
+                data[6] = feature->channels[4].values[i];
+                ROS_ASSERT(data[2] == 1);
+
+                image[feature_id].emplace_back(0,  data);
+            }
+
+            
+
+            ROS_DEBUG("[process] parse time eclipse : %lf", tick.delta_time());
         }
         
     }

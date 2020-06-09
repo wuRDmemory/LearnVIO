@@ -51,11 +51,11 @@ void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
 
     accl_0_ = accl;
     gyro_0_ = gyro;
-
 }
 
 void Estimator::processImage(double timestamp, Image_Type& image) {
-    ;
+    ROS_DEBUG("[estimate2] ========   new image come!!!  ==========");
+    
 }
 
 

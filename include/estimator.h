@@ -8,13 +8,13 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/Dense"
 
+#include "../include/visual/feature.h"
 #include "../include/inertial/preintegrate.h"
 
 using namespace std;
 using namespace cv;
 using namespace Eigen;
 
-typedef vector<pair<int, double*> > Image_Type;
 
 class Estimator {
 private:
