@@ -82,9 +82,9 @@ public:
         Jacobian_.setIdentity();
         covariance_.setIdentity();
 
-        accl_buf_.push_back(accl0);
-        gyro_buf_.push_back(gyro0);
-        dt_buf_.push_back(0);
+        // accl_buf_.push_back(accl0);
+        // gyro_buf_.push_back(gyro0);
+        // dt_buf_.push_back(0);
 
         Matrix3f I   = Matrix3f::Identity();
 

@@ -44,13 +44,21 @@ include_directories(${PROJECT_SOURCE_DIR}/include/inertial/)
 include_directories(${PROJECT_SOURCE_DIR}/include/visual/)
 include_directories(${PROJECT_SOURCE_DIR}/camera/)
 
-
 # source
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cc)
+file(GLOB INR_FILES ${PROJECT_SOURCE_DIR}/src/inertial/*.cc)
+file(GLOB VIS_FILES ${PROJECT_SOURCE_DIR}/src/visual/*.cc)
 file(GLOB CMR_FILES ${PROJECT_SOURCE_DIR}/camera/*.cc)
 
-add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${CMR_FILES})
+
+# compile options
+add_definitions(-DUSE_ROS)
+
+add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES})
 target_link_libraries(feature_track_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(front_end_node front_end_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES})
+target_link_libraries(front_end_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 #############
 ## Install ##

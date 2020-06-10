@@ -45,8 +45,19 @@ public:
         return ref_frame_id_;   
     }
 
+    Vector3f getF(int frame_id) {
+        int d = frame_id - ref_frame_id_;
+        return vis_fs_[d];
+    }
+    
+    Vector2f getUV(int frame_id) {
+        int d = frame_id - ref_frame_id_;
+        return vis_uv_[d];
+    }
+
     bool contains(int frame_id) {
-        if (frame_id < ref_frame_id_) return false;
+        if (frame_id < ref_frame_id_) 
+            return false;
 
         return (frame_id - ref_frame_id_) < (int)vis_fs_.size();
     }
@@ -66,14 +77,14 @@ public:
         }
 
         // TODO: how to remove it
+        vis_fs_.erase(vis_fs_.begin()+delta);
+        vis_uv_.erase(vis_uv_.begin()+delta);
         return true;
     }
 };
 
 class FeatureManager {
 public:
-    static int feature_id;
-
     map<int, Feature*> all_ftr_;
 
 public:
@@ -82,7 +93,13 @@ public:
     FeatureManager();
     ~FeatureManager();
 
+    int size() const { return all_ftr_.size(); }
+
     bool addNewFeatures(const Image_Type& image_data, int frame_id);
 
+
+private:
     float computeParallax(Feature* ftr, int frame_id);
 };
+
+typedef FeatureManager* FeatureManagerPtr;

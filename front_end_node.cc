@@ -20,14 +20,19 @@
 
 #include "include/config.h"
 #include "include/tick.h"
+#include "include/estimator.h"
 
 using namespace std;
 using namespace Eigen;
+
+typedef pair<vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr> Data_Type;
 
 static bool first_feature = true;
 
 static double current_time = -1;
 static double last_imu_t = 0;
+
+static Estimator estimator;
 
 static condition_variable con;
 static mutex imu_buf_lock;
@@ -38,7 +43,6 @@ static mutex estimate_lock;
 static queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 static queue<sensor_msgs::ImuConstPtr>        imu_buf;
 
-typedef pair<vector<sensor_msgs::ImuConstPtr>, sensor_msgs::PointCloudConstPtr> Data_Type;
 
 // feature callback
 void pointCloudCallBack(const sensor_msgs::PointCloudConstPtr& feature_msg) {
@@ -130,7 +134,7 @@ vector<Data_Type> getMeasures() {
 void process() {
     while(true) {
         vector<Data_Type> measures; 
-        unique_lock lock(imu_buf_lock);
+        unique_lock<mutex> lock(imu_buf_lock);
 
         con.wait(lock, [&]{
             return (measures = getMeasures()).size() != 0;
@@ -163,7 +167,7 @@ void process() {
                     gx = imu->angular_velocity.x;
                     gy = imu->angular_velocity.y;
                     gz = imu->angular_velocity.z;
-                    estimator.processIMU(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                    estimator.processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
                 }
@@ -186,12 +190,12 @@ void process() {
                     gx = w1 * gx + w2 * imu->angular_velocity.x;
                     gy = w1 * gy + w2 * imu->angular_velocity.y;
                     gz = w1 * gz + w2 * imu->angular_velocity.z;
-                    estimator.processIMU(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                    estimator.processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
                 }
             }
 
             Tick tick;
-            map<int, vector<pair<int, vector<double> > > > image;
+            Image_Type image;
             for (unsigned int i = 0; i < feature->points.size(); i++) {
                 int feature_id = feature->channels[0].values[i];
                 
@@ -205,12 +209,13 @@ void process() {
                 data[6] = feature->channels[4].values[i];
                 ROS_ASSERT(data[2] == 1);
 
-                image[feature_id].emplace_back(0,  data);
+                image.insert(make_pair(feature_id, make_pair(0, data)));
             }
 
-            
+            unique_lock<mutex> lock(estimate_lock);
+            estimator.processImage(feature->header.stamp.toSec(), image);
 
-            ROS_DEBUG("[process] parse time eclipse : %lf", tick.delta_time());
+            ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
         }
         
     }
@@ -222,9 +227,9 @@ int main(int argc, char** argv) {
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     readParameters(n);
 
-    ros::Subscriber point_cloud_suber = n.subscribe("feature", 1000, pointCloudCallBack);
-
-
+    ros::Subscriber point_cloud_suber = n.subscribe("/feature", 1000, pointCloudCallBack);
+    ros::Subscriber imu_suber         = n.subscribe(IMU_TOPIC, 2000, imuCallBack, ros::TransportHints().tcpNoDelay());
     
+    ros::spin();
     return 1;
 }

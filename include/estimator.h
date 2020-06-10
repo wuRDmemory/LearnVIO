@@ -20,8 +20,11 @@ class Estimator {
 private:
     
     bool first_imu_;
+    bool initial_;
     
     int frame_count_;
+
+    FeatureManagerPtr feature_manager_;
 
     vector<PreIntegrate*> preintegrates_;
 
@@ -32,7 +35,6 @@ private:
     vector<Vector3f> BGS_;
 
     Vector3f g_;
-
     Vector3f accl_0_, gyro_0_;
 
 public:
@@ -44,4 +46,8 @@ public:
     void processImage(double timestamp, Image_Type& image);
 
     void clearState();
+
+private:
+    bool structInitial();
+
 };

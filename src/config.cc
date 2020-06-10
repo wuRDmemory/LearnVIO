@@ -24,7 +24,7 @@ bool PUB_THIS_FRAME;
 float ACCL_N, GYRO_N;
 float ACCL_BIAS_N, GYRO_BIAS_N;
 
-
+int FEN_WINDOW_SIZE;
 
 template <typename T> 
 T getParameter(ros::NodeHandle& n, string name) {

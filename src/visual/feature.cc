@@ -1,11 +1,13 @@
 #include "../../include/visual/feature.h"
-
-int FeatureManager::feature_id = 0;
+#include "../../include/log.h"
 
 FeatureManager::FeatureManager() {
     all_ftr_.clear();
 }
 
+FeatureManager::~FeatureManager() {
+    ;
+}
 
 bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) {
     vector<int> track_ftr_ids;
@@ -33,7 +35,7 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) 
         }
     }
 
-    printf("[FM add ftr] track feature cnt : %d\n", track_ftr_ids.size());
+    LOGD("[FM add ftr] track feature cnt : %d", (int)track_ftr_ids.size());
 
     if (frame_id < 2 || track_ftr_ids.size() < 20) {
         // new key frame        
@@ -43,28 +45,40 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) 
     float parallax_sum = 0;
     int   parallax_num = 0;
     for (auto& pr : all_ftr_) {
-        int       id = pr.first;
-        Feature* ftr = pr.second;
+        int       id = pr.first;  // feature id
+        Feature* ftr = pr.second; // feature
 
         if (   ftr->getRefFrameId()             <  frame_id-2
             && ftr->getRefFrameId()+ftr->size() >= frame_id ) {
-            
+            parallax_sum += computeParallax(ftr, frame_id);
             parallax_num++;
         }
     }
 
     if (parallax_num == 0) {
         // not enough good feature in feature manager
+        return true;
     }
     else {
         // enough good feature
+        parallax_sum /= parallax_num;
+        parallax_sum *= FOCAL_LENGTH;
 
+        LOGI("[FM add ftr] parallax : %f", parallax_sum);
+        return parallax_sum >= 10;
     }
 
     return true;
 }
 
 float FeatureManager::computeParallax(Feature* ftr, int frame_id) {
-    
+    int ref_index   = ftr->ref_frame_id_;
+    Vector3f& ftr_i = ftr->vis_fs_[frame_id - ref_index - 1];
+    Vector3f& ftr_j = ftr->vis_fs_[frame_id - ref_index - 2];
+
+    float dx = ftr_i.x()/ftr_i.z() - ftr_j.x()/ftr_j.z();
+    float dy = ftr_i.y()/ftr_i.z() - ftr_j.y()/ftr_j.z();
+
+    return max(0.0f, sqrtf(dx*dx + dy*dy));
 }
 
