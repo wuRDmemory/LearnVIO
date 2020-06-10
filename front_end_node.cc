@@ -101,7 +101,7 @@ vector<Data_Type> getMeasures() {
         // 2. newest feature is early than oldest imu
         //    IMU ts:                |-------|
         //    feature ts:  |------|
-        if (feature_buf.back()->header.stamp.toSec() <= imu_buf.back()->header.stamp.toSec()) {
+        if (feature_buf.back()->header.stamp.toSec() <= imu_buf.front()->header.stamp.toSec()) {
             ROS_WARN("throw this feature frame!");
             break;
         }
@@ -143,7 +143,8 @@ void process() {
         // already handle the imu buffer
         lock.unlock();
 
-        estimate_lock.lock();
+        {
+        unique_lock<mutex> lock1(estimate_lock);
         for (Data_Type& measure : measures) {
             auto feature = measure.second;
             auto imus    = measure.first;
@@ -190,7 +191,7 @@ void process() {
                     gx = w1 * gx + w2 * imu->angular_velocity.x;
                     gy = w1 * gy + w2 * imu->angular_velocity.y;
                     gz = w1 * gz + w2 * imu->angular_velocity.z;
-                    estimator.processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
+                    estimator.processImu(dt_1, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
                 }
             }
 
@@ -212,12 +213,11 @@ void process() {
                 image.insert(make_pair(feature_id, make_pair(0, data)));
             }
 
-            unique_lock<mutex> lock(estimate_lock);
             estimator.processImage(feature->header.stamp.toSec(), image);
 
             ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
         }
-        
+        }
     }
 }
 
@@ -227,9 +227,10 @@ int main(int argc, char** argv) {
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
     readParameters(n);
 
-    ros::Subscriber point_cloud_suber = n.subscribe("/feature", 1000, pointCloudCallBack);
+    ros::Subscriber point_cloud_suber = n.subscribe("/feature_tracker/feature", 1000, pointCloudCallBack);
     ros::Subscriber imu_suber         = n.subscribe(IMU_TOPIC, 2000, imuCallBack, ros::TransportHints().tcpNoDelay());
     
+    thread main_process{process};
     ros::spin();
     return 1;
 }

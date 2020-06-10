@@ -32,6 +32,7 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) 
         else {
             // not exist
             Feature* new_ftr = new Feature(id, frame_id, f, uv);
+            all_ftr_.insert(make_pair(id, new_ftr));
         }
     }
 

@@ -44,8 +44,11 @@ T getParameter(ros::NodeHandle& n, string name) {
 void readParameters(ros::NodeHandle& n) {
     string config_file_path;
     string vins_folder_path;
-    config_file_path = getParameter<string>(n, "config_file");
-    vins_folder_path = getParameter<string>(n, "vins_folder");
+    // config_file_path = getParameter<string>(n, "config_file");
+    // vins_folder_path = getParameter<string>(n, "vins_folder");
+
+    config_file_path = "/home/ubuntu/catkin_ws/src/learn_vio/config/config_file.yml";
+    vins_folder_path = "/home/ubuntu/catkin_ws/src/learn_vio/";
 
     CONFIG_PATH = config_file_path;
     

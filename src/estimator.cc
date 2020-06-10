@@ -1,6 +1,7 @@
 #include "../include/estimator.h"
 #include "../include/utils.h"
 #include "../include/log.h"
+#include "../include/config.h"
 
 Estimator::Estimator() {
     first_imu_ = true;
@@ -11,16 +12,28 @@ Estimator::Estimator() {
 
     feature_manager_ = new FeatureManager();
 
-    preintegrates_.resize(FEN_WINDOW_SIZE+1, NULL);
+    preintegrates_.resize(FEN_WINDOW_SIZE+1);
 
-    RS_.resize(FEN_WINDOW_SIZE+1,  Quaternionf::Identity());
-    VS_.resize(FEN_WINDOW_SIZE+1,  Vector3f::Zero());
-    PS_.resize(FEN_WINDOW_SIZE+1,  Vector3f::Zero());
+    RS_.resize(FEN_WINDOW_SIZE+1);
+    VS_.resize(FEN_WINDOW_SIZE+1);
+    PS_.resize(FEN_WINDOW_SIZE+1);
 
-    BAS_.resize(FEN_WINDOW_SIZE+1, Vector3f::Zero());
-    BGS_.resize(FEN_WINDOW_SIZE+1, Vector3f::Zero());
+    BAS_.resize(FEN_WINDOW_SIZE+1);
+    BGS_.resize(FEN_WINDOW_SIZE+1);
+
+    for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        preintegrates_[i] = NULL;
+
+        RS_[i].setIdentity();
+        VS_[i].setZero();
+        PS_[i].setZero();
+
+        BAS_[i].setZero();
+        BGS_[i].setZero();
+    }
 
     g_.setZero();
+
 }
 
 Estimator::~Estimator() {
@@ -29,6 +42,7 @@ Estimator::~Estimator() {
 
 void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
     
+    LOGD("[estimate] FEN_WINDOW_SIZE: %d, frame id %d", FEN_WINDOW_SIZE, frame_count_); 
     // 
     if (preintegrates_[frame_count_] == NULL) {
         preintegrates_[frame_count_] = new PreIntegrate(accl, gyro, BAS_[frame_count_], BGS_[frame_count_]);
@@ -60,7 +74,7 @@ void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
 }
 
 void Estimator::processImage(double timestamp, Image_Type& image) {
-    LOGD("[estimate2] ========   new image come!!!  ==========");
+    LOGI("[estimate2] ========   new image come!!!  ==========");
     bool margin_old = feature_manager_->addNewFeatures(image, frame_count_);
     if (margin_old) {
         LOGI("[estimate] >>> margin old state, build new key frame");

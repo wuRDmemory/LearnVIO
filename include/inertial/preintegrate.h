@@ -11,6 +11,7 @@
 
 #include "../../include/utils.h"
 #include "../../include/config.h"
+#include "../../include/log.h"
 
 using namespace std;
 using namespace cv;
@@ -67,7 +68,6 @@ private:
     
 
 public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
     PreIntegrate() = delete;
     PreIntegrate(const Vector3f& accl0,       const Vector3f& gyro0, 
@@ -82,9 +82,13 @@ public:
         Jacobian_.setIdentity();
         covariance_.setIdentity();
 
-        // accl_buf_.push_back(accl0);
-        // gyro_buf_.push_back(gyro0);
-        // dt_buf_.push_back(0);
+        result_delta_p_.setZero();
+        result_delta_v_.setZero();
+        result_delta_q_.setIdentity();
+
+        dt_buf_.clear();
+        accl_buf_.clear();
+        gyro_buf_.clear();
 
         Matrix3f I   = Matrix3f::Identity();
 
@@ -96,14 +100,16 @@ public:
         noise_.block<3, 3>(V_ONBA, V_ONBA) = (ACCL_BIAS_N*ACCL_BIAS_N)*I;
         noise_.block<3, 3>(V_ONBW, V_ONBW) = (GYRO_BIAS_N*GYRO_BIAS_N)*I;
     }
-    ~PreIntegrate();
+    ~PreIntegrate() {
+        ;
+    }
 
 
     // integration
     void push_back(double dt, Vector3f accl, Vector3f gyro) {
-        dt_buf_.push_back(dt);
-        accl_buf_.push_back(accl);
-        gyro_buf_.push_back(gyro);
+        // dt_buf_.push_back(dt);
+        // accl_buf_.push_back(accl);
+        // gyro_buf_.push_back(gyro);
         integrate(dt, accl, gyro);
     }
 
@@ -128,16 +134,15 @@ public:
         }
     }
 
-    void integrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
-        accl_1_ = accl;
-        gyro_1_ = gyro;
-        
+    void integrate(double dt, Vector3f accl, Vector3f gyro) {
+
+        LOGD("pass a");
         midPointIntegrate(dt, accl, gyro);
 
         delta_p_ = result_delta_p_;
         delta_v_ = result_delta_v_;
-        delta_q_ = result_delta_q_;
-        delta_q_.normalize();
+        // delta_q_ = result_delta_q_;
+        // delta_q_.normalize();
 
         accl_bias_ = result_accl_bias_;
         gyro_bias_ = result_gyro_bias_;       
@@ -149,20 +154,22 @@ public:
     }
 
 
-    void midPointIntegrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
+    void midPointIntegrate(float dt, Vector3f accl, Vector3f gyro) {
         const float dt2 = dt*dt;
         
-        Vector3f gyro_mid = (gyro_1_+gyro_0_)/2 - gyro_bias_;
+        Vector3f gyro_mid = (gyro + gyro_0_)/2 - gyro_bias_;
         Vector3f gyro_mid_dt = gyro_mid*dt;
 
         Quaternionf q_k0 = delta_q_;
-        Quaternionf q_k1 = q_k0 * vec2quat(gyro_mid_dt);
+        Quaternionf q_k1 = q_k0 * vec2quat<float>(gyro_mid_dt);
 
         Vector3f accl_b0 = accl_0_ - accl_bias_;
-        Vector3f accl_b1 = accl_1_ - accl_bias_;
+        Vector3f accl_b1 = accl    - accl_bias_;
 
         Vector3f accl_k0 = q_k0*(accl_b0);
         Vector3f accl_k1 = q_k1*(accl_b1);
+        
+        LOGD("pass b");
 
         {   // preintegrate
             Matrix<float, J_NUMS, J_NUMS> F;
@@ -218,14 +225,18 @@ public:
             // update covariance
             covariance_ = F*covariance_*F.transpose() + V*noise_*V.transpose();
         }
+        LOGD("pass c");
 
         Vector3f mid_accl = (accl_k0+accl_k1)/2;
 
+        LOGD("pass d");
         result_delta_p_ = delta_p_ + delta_v_*dt + mid_accl*dt*dt/2;
         result_delta_v_ = delta_v_ + mid_accl*dt;
-        result_delta_q_ = q_k1;
+        // result_delta_q_ = q_k1;
 
+        LOGD("pass e");
         result_accl_bias_ = accl_bias_;
         result_gyro_bias_ = gyro_bias_;
+        LOGD("pass g");
     }
 };
