@@ -43,22 +43,24 @@ include_directories(/usr/include/eigen3/)
 include_directories(${PROJECT_SOURCE_DIR}/include/)
 include_directories(${PROJECT_SOURCE_DIR}/include/inertial/)
 include_directories(${PROJECT_SOURCE_DIR}/include/visual/)
+include_directories(${PROJECT_SOURCE_DIR}/include/util/)
 include_directories(${PROJECT_SOURCE_DIR}/camera/)
 
 # source
 file(GLOB SRC_FILES ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB INR_FILES ${PROJECT_SOURCE_DIR}/src/inertial/*.cc)
 file(GLOB VIS_FILES ${PROJECT_SOURCE_DIR}/src/visual/*.cc)
+file(GLOB UTL_FILES ${PROJECT_SOURCE_DIR}/src/util/*.cc)
 file(GLOB CMR_FILES ${PROJECT_SOURCE_DIR}/camera/*.cc)
 
 
 # compile options
 add_definitions(-DUSE_ROS)
 
-add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES})
+add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES} ${UTL_FILES})
 target_link_libraries(feature_track_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(front_end_node front_end_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES})
+add_executable(front_end_node front_end_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES} ${UTL_FILES})
 target_link_libraries(front_end_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 #############

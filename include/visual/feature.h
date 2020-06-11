@@ -9,7 +9,6 @@
 #include "eigen3/Eigen/Dense"
 #include "eigen3/Eigen/Core"
 
-#include "../../include/visual/frame.h"
 
 using namespace std;
 using namespace cv;

@@ -1,5 +1,6 @@
 #include "../../include/visual/feature.h"
-#include "../../include/log.h"
+#include "../../include/util/log.h"
+#include "../../include/util/config.h"
 
 FeatureManager::FeatureManager() {
     all_ftr_.clear();

@@ -1,14 +1,4 @@
-/*
- * @Author: your name
- * @Date: 2020-05-24 17:32:19
- * @LastEditTime: 2020-05-27 22:31:38
- * @LastEditors: Please set LastEditors
- * @Description: In User Settings Edit
- * @FilePath: /LearnVIO/include/LearnVIO/config.h
- */ 
 #pragma once
-
-#include <ros/ros.h>
 
 #include <iostream>
 #include <vector>
@@ -39,4 +29,4 @@ extern float ACCL_BIAS_N, GYRO_BIAS_N;
 
 extern int FEN_WINDOW_SIZE;
 
-void readParameters(ros::NodeHandle& n);
+bool readParameters(string config_path, string vins_path);

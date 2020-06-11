@@ -1,5 +1,6 @@
-#include "../include/config.h"
+#include "../../include/util/config.h"
 #include "opencv2/opencv.hpp"
+#include "../../include/util/log.h"
 
 string CONFIG_PATH;
 string IMAGE_TOPIC;
@@ -26,29 +27,14 @@ float ACCL_BIAS_N, GYRO_BIAS_N;
 
 int FEN_WINDOW_SIZE;
 
-template <typename T> 
-T getParameter(ros::NodeHandle& n, string name) {
-    T ans;
-    if (n.getParam(name, ans)) {
-        ROS_INFO_STREAM("load parameter " << name << " : " << ans);
-    }
-    else {
-        ROS_ERROR_STREAM("CAN NOT LOAD PARAMETER: " << name);
-        n.shutdown();
-    }
-
-    return ans;
-}
-
-
-void readParameters(ros::NodeHandle& n) {
+bool readParameters(string config_path, string vins_path) {
     string config_file_path;
     string vins_folder_path;
     // config_file_path = getParameter<string>(n, "config_file");
     // vins_folder_path = getParameter<string>(n, "vins_folder");
 
-    config_file_path = "/home/ubuntu/catkin_ws/src/learn_vio/config/config_file.yml";
-    vins_folder_path = "/home/ubuntu/catkin_ws/src/learn_vio/";
+    config_file_path = config_path;
+    vins_folder_path = vins_path;
 
     CONFIG_PATH = config_file_path;
     
@@ -57,9 +43,8 @@ void readParameters(ros::NodeHandle& n) {
     fs.open(config_file_path, cv::FileStorage::READ);
     
     if (!fs.isOpened()) {
-        ROS_ERROR("CAN OPEN CONFIG FILE!!!");
-        n.shutdown();
-        return ;
+        LOGE("CAN OPEN CONFIG FILE!!!");
+        return false;
     }
 
 
@@ -97,4 +82,6 @@ void readParameters(ros::NodeHandle& n) {
     FEN_WINDOW_SIZE = 10;
 
     fs.release();
+
+    return true;
 }

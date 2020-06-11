@@ -1,7 +1,7 @@
 #include "ros/ros.h"
 #include "../include/feature_track.h"
-#include "../include/config.h"
-#include "../include/tick.h"
+#include "../include/util/config.h"
+#include "../include/util/tick.h"
 
 int FeatureTrack::id = 0;
 

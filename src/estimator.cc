@@ -1,7 +1,7 @@
 #include "../include/estimator.h"
-#include "../include/utils.h"
-#include "../include/log.h"
-#include "../include/config.h"
+#include "../include/util/utils.h"
+#include "../include/util/log.h"
+#include "../include/util/config.h"
 
 Estimator::Estimator() {
     first_imu_ = true;
@@ -42,7 +42,7 @@ Estimator::~Estimator() {
 
 void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
     
-    LOGD("[estimate] FEN_WINDOW_SIZE: %d, frame id %d", FEN_WINDOW_SIZE, frame_count_); 
+    // LOGD("[estimate] FEN_WINDOW_SIZE: %d, frame id %d", FEN_WINDOW_SIZE, frame_count_); 
     // 
     if (preintegrates_[frame_count_] == NULL) {
         preintegrates_[frame_count_] = new PreIntegrate(accl, gyro, BAS_[frame_count_], BGS_[frame_count_]);
@@ -77,10 +77,10 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
     LOGI("[estimate2] ========   new image come!!!  ==========");
     bool margin_old = feature_manager_->addNewFeatures(image, frame_count_);
     if (margin_old) {
-        LOGI("[estimate] >>> margin old state, build new key frame");
+        LOGI("[estimate] Margin old state, build new key frame");
     } 
     else {
-        LOGI("[estimate] >>> margin new state");
+        LOGI("[estimate] Margin new state");
     }
 
     LOGI("[estimate] Solving %d frame", frame_count_);
@@ -117,6 +117,7 @@ bool Estimator::structInitial() {
         
         vector<int> ftr_ids;
         ftr_ids.reserve(100);
+
         for (auto& pr: all_ftr) {
             int ftr_id = pr.first;
             if (   pr.second->contains(cur_frame_id)

@@ -9,9 +9,9 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/Dense"
 
-#include "../../include/utils.h"
-#include "../../include/config.h"
-#include "../../include/log.h"
+#include "../../include/util/utils.h"
+#include "../../include/util/config.h"
+#include "../../include/util/log.h"
 
 using namespace std;
 using namespace cv;
@@ -34,6 +34,8 @@ using namespace Eigen;
 #define V_ONBW   15
 
 class PreIntegrate {
+public:
+
 private:
     float sum_dt_;
 
@@ -100,6 +102,7 @@ public:
         noise_.block<3, 3>(V_ONBA, V_ONBA) = (ACCL_BIAS_N*ACCL_BIAS_N)*I;
         noise_.block<3, 3>(V_ONBW, V_ONBW) = (GYRO_BIAS_N*GYRO_BIAS_N)*I;
     }
+
     ~PreIntegrate() {
         ;
     }
@@ -107,9 +110,9 @@ public:
 
     // integration
     void push_back(double dt, Vector3f accl, Vector3f gyro) {
-        // dt_buf_.push_back(dt);
-        // accl_buf_.push_back(accl);
-        // gyro_buf_.push_back(gyro);
+        dt_buf_.push_back(dt);
+        accl_buf_.push_back(accl);
+        gyro_buf_.push_back(gyro);
         integrate(dt, accl, gyro);
     }
 
@@ -136,13 +139,12 @@ public:
 
     void integrate(double dt, Vector3f accl, Vector3f gyro) {
 
-        LOGD("pass a");
         midPointIntegrate(dt, accl, gyro);
 
         delta_p_ = result_delta_p_;
         delta_v_ = result_delta_v_;
-        // delta_q_ = result_delta_q_;
-        // delta_q_.normalize();
+        delta_q_ = result_delta_q_;
+        delta_q_.normalize();
 
         accl_bias_ = result_accl_bias_;
         gyro_bias_ = result_gyro_bias_;       
@@ -169,8 +171,6 @@ public:
         Vector3f accl_k0 = q_k0*(accl_b0);
         Vector3f accl_k1 = q_k1*(accl_b1);
         
-        LOGD("pass b");
-
         {   // preintegrate
             Matrix<float, J_NUMS, J_NUMS> F;
             F.setIdentity();
@@ -225,18 +225,14 @@ public:
             // update covariance
             covariance_ = F*covariance_*F.transpose() + V*noise_*V.transpose();
         }
-        LOGD("pass c");
 
         Vector3f mid_accl = (accl_k0+accl_k1)/2;
 
-        LOGD("pass d");
         result_delta_p_ = delta_p_ + delta_v_*dt + mid_accl*dt*dt/2;
         result_delta_v_ = delta_v_ + mid_accl*dt;
-        // result_delta_q_ = q_k1;
+        result_delta_q_ = q_k1;
 
-        LOGD("pass e");
         result_accl_bias_ = accl_bias_;
         result_gyro_bias_ = gyro_bias_;
-        LOGD("pass g");
     }
 };

@@ -13,8 +13,8 @@
 
 #include "camera/camera_factory.h"
 #include "camera/camera_base.h"
-#include "include/config.h"
-#include "include/tick.h"
+#include "include/util/config.h"
+#include "include/util/tick.h"
 #include "include/feature_track.h"
 
 using namespace std;
@@ -36,6 +36,21 @@ double first_image_time = 0;
 
 CameraModelPtr camera;
 FeatureTrack tracker;
+
+template <typename T> 
+T getParameter(ros::NodeHandle& n, string name) {
+    T ans;
+    if (n.getParam(name, ans)) {
+        ROS_INFO_STREAM("load parameter " << name << " : " << ans);
+    }
+    else {
+        ROS_ERROR_STREAM("CAN NOT LOAD PARAMETER: " << name);
+        n.shutdown();
+    }
+
+    return ans;
+}
+
 
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
     
@@ -196,7 +211,11 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "feature_tracker");
     ros::NodeHandle n("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
-    readParameters(n);
+    
+    string config_path = getParameter<string>(n, "config_file");
+    string vins_path   = getParameter<string>(n, "vins_folder");
+    
+    readParameters(config_path, vins_path);
 
     camera = CameraFactory::buildModuleFromConfigFile(CONFIG_PATH);
     tracker.setCamera(camera);

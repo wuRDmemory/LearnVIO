@@ -18,8 +18,8 @@
 #include "eigen3/Eigen/Core"
 #include "eigen3/Eigen/Dense"
 
-#include "include/config.h"
-#include "include/tick.h"
+#include "include/util/config.h"
+#include "include/util/tick.h"
 #include "include/estimator.h"
 
 using namespace std;
@@ -32,7 +32,7 @@ static bool first_feature = true;
 static double current_time = -1;
 static double last_imu_t = 0;
 
-static Estimator estimator;
+static Estimator* estimator;
 
 static condition_variable con;
 static mutex imu_buf_lock;
@@ -43,6 +43,19 @@ static mutex estimate_lock;
 static queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 static queue<sensor_msgs::ImuConstPtr>        imu_buf;
 
+template <typename T> 
+T getParameter(ros::NodeHandle& n, string name) {
+    T ans;
+    if (n.getParam(name, ans)) {
+        ROS_INFO_STREAM("load parameter " << name << " : " << ans);
+    }
+    else {
+        ROS_ERROR_STREAM("CAN NOT LOAD PARAMETER: " << name);
+        n.shutdown();
+    }
+
+    return ans;
+}
 
 // feature callback
 void pointCloudCallBack(const sensor_msgs::PointCloudConstPtr& feature_msg) {
@@ -154,7 +167,7 @@ void process() {
             float dt;
 
             for (auto& imu : imus) {
-                double t     = imu->header.stamp.toSec();
+                double t = imu->header.stamp.toSec();
                 if (t <= feature_time) { 
                     if (current_time < 0)
                         current_time = t;
@@ -168,7 +181,7 @@ void process() {
                     gx = imu->angular_velocity.x;
                     gy = imu->angular_velocity.y;
                     gz = imu->angular_velocity.z;
-                    estimator.processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
+                    estimator->processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
                     //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
                 }
@@ -191,7 +204,7 @@ void process() {
                     gx = w1 * gx + w2 * imu->angular_velocity.x;
                     gy = w1 * gy + w2 * imu->angular_velocity.y;
                     gz = w1 * gz + w2 * imu->angular_velocity.z;
-                    estimator.processImu(dt_1, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
+                    estimator->processImu(dt_1, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
                 }
             }
 
@@ -213,7 +226,7 @@ void process() {
                 image.insert(make_pair(feature_id, make_pair(0, data)));
             }
 
-            estimator.processImage(feature->header.stamp.toSec(), image);
+            estimator->processImage(feature->header.stamp.toSec(), image);
 
             ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
         }
@@ -225,7 +238,16 @@ int main(int argc, char** argv) {
     ros::init(argc, argv, "front_end");
     ros::NodeHandle n("~");
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
-    readParameters(n);
+    
+    string config_path = "/home/ubuntu/catkin_ws/src/learn_vio/config/config_file.yml";    // getParameter<string>(n, "config_file");
+    string vins_path   = "/home/ubuntu/catkin_ws/src/learn_vio/";                          // getParameter<string>(n, "vins_folder");
+    
+    if (!readParameters(config_path, vins_path)) {
+        n.shutdown();
+        return 0;
+    }
+
+    estimator = new Estimator();
 
     ros::Subscriber point_cloud_suber = n.subscribe("/feature_tracker/feature", 1000, pointCloudCallBack);
     ros::Subscriber imu_suber         = n.subscribe(IMU_TOPIC, 2000, imuCallBack, ros::TransportHints().tcpNoDelay());
