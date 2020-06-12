@@ -143,6 +143,8 @@ bool Estimator::structInitial() {
             ref_im_pts.push_back(all_ftr[id]->getUV(ref_frame_id));
             cur_im_pts.push_back(all_ftr[id]->getUV(cur_frame_id));
         }
+
+        
     }    
     return true;
 }
