@@ -10,11 +10,12 @@
 
 #include "../include/visual/feature.h"
 #include "../include/inertial/preintegrate.h"
+#include "../include/initial/initial.h"
+#include "../include/visual/globalsfm.h"
 
 using namespace std;
 using namespace cv;
 using namespace Eigen;
-
 
 class Estimator {
 private:
@@ -24,7 +25,11 @@ private:
     
     int frame_count_;
 
-    FeatureManagerPtr feature_manager_;
+    FeatureManager feature_manager_;
+
+    // this is for initial
+    // do not use preintegrates to initial because the initial maybe failed
+    PreIntegrate* temp_preintegrate_;
 
     vector<PreIntegrate*> preintegrates_;
 
@@ -33,6 +38,10 @@ private:
     vector<Vector3f> PS_;
     vector<Vector3f> BAS_;
     vector<Vector3f> BGS_;
+
+    map<double, FrameStruct> all_frames_;
+
+    vector<double> timestamp_;
 
     Vector3f g_;
     Vector3f accl_0_, gyro_0_;

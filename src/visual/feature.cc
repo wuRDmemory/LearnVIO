@@ -3,11 +3,22 @@
 #include "../../include/util/config.h"
 
 FeatureManager::FeatureManager() {
-    all_ftr_.clear();
+    clear();
 }
 
 FeatureManager::~FeatureManager() {
     ;
+}
+
+
+bool FeatureManager::clear() {
+    for (auto& pir : all_ftr_) {
+        if (pir.second != nullptr) {
+            delete pir.second;
+        }
+    }
+
+    all_ftr_.clear();
 }
 
 bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) {

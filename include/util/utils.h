@@ -42,3 +42,5 @@ Quaternion<T> vec2quat(const Matrix<T, 3, 1>& vec) {
     
     return ret;
 }
+
+

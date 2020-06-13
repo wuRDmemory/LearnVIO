@@ -21,7 +21,10 @@ class Feature {
 public:
     int id_;
     int ref_frame_id_;
-    
+
+    float inv_d_;
+    Vector3f pt3d_;
+
     vector<Vector3f>  vis_fs_;
     vector<Vector2f>  vis_uv_;
 
@@ -34,27 +37,31 @@ public:
         ref_frame_id_ = ref_frame_id;
         vis_fs_.push_back(f);
         vis_uv_.push_back(uv);
+
+        inv_d_ = -1;
+        pt3d_ = Vector3f(0, 0, -1);
     }
 
     int size() const {
         return vis_fs_.size();
     }
 
-    int getRefFrameId() { 
+    int getRefFrameId() const { 
         return ref_frame_id_;   
     }
 
-    Vector3f getF(int frame_id) {
+    Vector3f getF(int frame_id) const {
         int d = frame_id - ref_frame_id_;
+        assert(d >= 0 && d < vis_fs_.size() || "feature manager error!!!");
         return vis_fs_[d];
     }
     
-    Vector2f getUV(int frame_id) {
+    Vector2f getUV(int frame_id) const {
         int d = frame_id - ref_frame_id_;
         return vis_uv_[d];
     }
 
-    bool contains(int frame_id) {
+    bool contains(int frame_id) const {
         if (frame_id < ref_frame_id_) 
             return false;
 
@@ -92,10 +99,11 @@ public:
     FeatureManager();
     ~FeatureManager();
 
+    bool clear();
+
     int size() const { return all_ftr_.size(); }
 
     bool addNewFeatures(const Image_Type& image_data, int frame_id);
-
 
 private:
     float computeParallax(Feature* ftr, int frame_id);

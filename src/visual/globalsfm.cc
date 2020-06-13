@@ -1,4 +1,5 @@
-#include "../../include/visual/initial.h"
+#include "../../include/visual/globalsfm.h"
+#include "../../include/util/utils.h"
 #include "../../include/util/config.h"
 
 namespace cv {
@@ -189,29 +190,249 @@ namespace cv {
     }
 }
 
-static bool computeRelativeRT(const vector<Point3f>& pts1, const vector<Point3f>& pts2, Matrix3f& Rrc, Matrix3f& trc) {
+Vector3f singleTriangle(Vector3f& f1, Vector3f& f2, const Matrix3f& R21, const Vector3f& t21) {
+    Matrix<float, 3, 2> A;
+    Vector3f b = t21;
+
+    A.col(0) =   R21*f1;
+    A.col(1) = -1.0f*f2;
+
+    Matrix2f ATA = A.transpose()*A;
+    Vector2f ATb = A.transpose()*b;
+
+    if (ATA.determinant() < 1.0e-5f) {
+        return Vector3f(0,0,-1);
+    }
+
+    Vector2f x = -ATA.inverse()*ATb;
+
+    Vector3f pt3d1 = f1*x(0);
+    Vector3f pt3d2 = R21.transpose()*(f2*x(1) - t21);
+
+    return (pt3d1+pt3d2)/2;
+}
+
+int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3f& Rcr, Vector3f& tcr) {
     if (pts1.size() <= 15) {
         return false;
     }
 
     cv::Mat mask;
-    cv::Mat E = cv::findFundamentalMat(pts1, pts2, cv::FM_RANSAC, 0.3 / 460, 0.99, mask);
+    cv::Mat E = cv::findFundamentalMat(pts1, pts2, cv::FM_RANSAC, 0.3 / FOCAL_LENGTH, 0.99, mask);
     cv::Mat cameraMatrix = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
     cv::Mat rot, trans;
     int inlier_cnt = cv::recoverPose(E, pts1, pts2, cameraMatrix, rot, trans, mask);
 
-    Eigen::Matrix3f R;
-    Eigen::Vector3f T;
     for (int i = 0; i < 3; i++) {   
-        T(i) = trans.at<double>(i, 0);
+        tcr(i) = trans.at<double>(i, 0);
         for (int j = 0; j < 3; j++)
-            R(i, j) = rot.at<double>(i, j);
+            Rcr(i, j) = rot.at<double>(i, j);
+    }
+    
+    return inlier_cnt;
+}
+
+
+int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vector<FrameStruct>& all_frames) {
+    const FrameStruct& frame_r = all_frames[id1];
+    const FrameStruct& frame_c = all_frames[id2];
+
+    const Matrix3f& Rcr = frame_c.Rcw_;
+    const Vector3f& tcr = frame_c.tcw_;
+
+    set<int> covisual;
+    const set<int>& set1 = frame_r.feature_ids_;
+    const set<int>& set2 = frame_c.feature_ids_;
+    set_intersection(set1.begin(), set1.end(), set2.begin(), set2.end(), inserter(covisual, covisual.begin()));
+    
+    int cnt = 0;
+    for (int id : covisual) {
+        Feature* ftr = all_ftr[id];
+
+        if (ftr->pt3d_.z() > 0) {
+            continue;
+        }
+
+        Vector3f f1 = ftr->getF(id1);
+        Vector3f f2 = ftr->getF(id2);
+
+        Vector3f pt3d = singleTriangle(f1, f2, Rcr, tcr);
+        if (pt3d.z() < 0) {
+            continue;
+        }
+
+        cnt ++;
+        ftr->pt3d_ = pt3d;
+    }
+    
+    return cnt;
+}
+
+int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Matrix3f& Rcr, Vector3f& tcr) {
+    
+    int cnt = 0;
+    vector<Point3f> point3d;
+    vector<Point2f> point2d;
+
+    for (int id : vis_ftr_id) {
+        Feature* ftr = all_ftr[id];
+
+        if (ftr->pt3d_.z() < 0) {
+            continue;
+        }
+
+        Vector3f norm_point = ftr->getF(id1);
+        point3d.push_back(Point3f(ftr->pt3d_.x(), ftr->pt3d_.y(), ftr->pt3d_.z()));
+        point2d.push_back(Point2f(norm_point.x(), norm_point.y()));
     }
 
-    Rrc =  R.transpose();
-    trc = -R.transpose()*T;
-    if(inlier_cnt > 12)
-        return true;
-    else
-        return false;
+    if (point3d.size() < 15) {
+        return 0;
+    }
+
+    cv::Mat R, r, t;
+    
+    cv::eigen2cv(Rcr, R);
+    cv::Rodrigues(R, r);
+    cv::eigen2cv(tcr, t);
+    cv::Mat K = (cv::Mat_<double>(3,3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+    bool ret  = cv::solvePnP(point3d, point2d, K, cv::Mat(), r, t, true);
+
+    if (!ret) {
+        return 0;
+    }
+
+    cv::Rodrigues(r, R);
+    Matrix3d Rcrd;
+    Vector3d tcrd;
+
+    cv::cv2eigen(R, Rcrd);
+    cv::cv2eigen(t, tcrd);
+
+    Rcr = Rcrd.cast<float>();
+    tcr = tcrd.cast<float>();
+
+    return 1;
+}
+
+int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f& Rcl, Vector3f& tcl, int l) {
+    int frame_nums = frames.size();
+
+    // triangle all point l and current see
+    frames[0].Rcw_.setIdentity();
+    frames[1].tcw_.setZero();
+
+    frames.back().Rcw_ = Rcl;
+    frames.back().tcw_ = tcl;
+
+    trianglesTwoFrame(l, frame_nums-1, all_ftr, frames);
+
+    // from newest to l
+    vector<int> fails;
+
+    Matrix3f Rcw = Rcl;
+    Vector3f tcw = tcl;
+    for (int i = frame_nums-2; i > l; i--) {
+
+        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        if (ret == 0) {
+            fails.push_back(i);
+            continue;
+        }
+
+        frames[i].Rcw_ = Rcw;
+        frames[i].tcw_ = tcw;
+        // triangle 3D point by two frame
+        trianglesTwoFrame(l, i, all_ftr, frames);
+    }
+
+    Rcw.setIdentity();
+    tcw.setZero();
+    // from lastest to l
+    for (int i = 0; i < l; i++) {
+
+        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        if (ret == 0) {
+            fails.push_back(i);
+            continue;
+        }
+
+        frames[i].Rcw_ = Rcw;
+        frames[i].tcw_ = tcw;
+        // triangle 3D point by two frame
+        trianglesTwoFrame(l, i, all_ftr, frames);
+    }
+
+    // re initial failed frames
+    for (auto iter = fails.begin(); iter != fails.end();) {
+        Rcw.setIdentity();
+        tcw.setZero(); 
+        
+        int i = *iter;
+        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        
+        if (ret == 0) {
+            iter++;
+            continue;
+        }
+
+        iter = fails.erase(iter);
+    }
+
+    if (!fails.empty()) {
+        LOGW("[global sfm] some frame can not be locate");
+        return 0;
+    }
+
+    // triangle all features
+    int vaild_point_cnt      = 0;
+    int unvaild_point_cnt    = 0;
+    int untriangle_point_cnt = 0;
+    for (auto& pir : all_ftr) {
+        Feature* ftr = pir.second;
+        
+        if (ftr->pt3d_.z() > 0) {
+            vaild_point_cnt ++;
+            continue;
+        }
+
+        if (ftr->size() < 2) {
+            unvaild_point_cnt ++;
+            continue;
+        }
+
+        Vector3f f1 = ftr->vis_fs_[0];
+        Vector3f f2 = ftr->vis_fs_.back();
+
+        Matrix3f Rc1w = frames[ftr->ref_frame_id_].Rcw_;
+        Vector3f tc1w = frames[ftr->ref_frame_id_].tcw_;
+
+        Matrix3f Rc2w = frames[ftr->ref_frame_id_+ftr->size()-1].Rcw_;
+        Vector3f tc2w = frames[ftr->ref_frame_id_+ftr->size()-1].tcw_;
+
+        Matrix3f R21  = Rc2w*Rc1w.transpose();
+        Vector3f t21  = tc2w - R21*tc1w;
+
+        Vector3f pt3d = singleTriangle(f1, f2, R21, t21);
+
+        if (pt3d.z() < 0) {
+            untriangle_point_cnt++;
+            continue;
+        } 
+
+        Vector3f pt3d_w = Rc1w.transpose()*(pt3d - tc1w);
+
+        ftr->pt3d_ = pt3d_w;
+        vaild_point_cnt++;
+    }
+
+    LOGI("[global SFM] valid points:      %d|%d=%.2f", vaild_point_cnt,      (int)all_ftr.size(), vaild_point_cnt/(float)all_ftr.size());
+    LOGI("[global SFM] unvalid points:    %d|%d=%.2f", unvaild_point_cnt,    (int)all_ftr.size(), unvaild_point_cnt/(float)all_ftr.size());
+    LOGI("[global SFM] untriangle points: %d|%d=%.2f", untriangle_point_cnt, (int)all_ftr.size(), untriangle_point_cnt/(float)all_ftr.size());
+
+    for (int i = 0; i < frames.size(); i++) {
+        cout << i << ": " << frames[i].tcw_.transpose() << endl;
+    }
+
+    return 1;
 }

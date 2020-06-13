@@ -35,8 +35,6 @@ using namespace Eigen;
 
 class PreIntegrate {
 public:
-
-private:
     float sum_dt_;
 
     vector<double> dt_buf_;
@@ -92,6 +90,10 @@ public:
         accl_buf_.clear();
         gyro_buf_.clear();
 
+        dt_buf_.push_back(0.0f);
+        accl_buf_.push_back(accl0);
+        gyro_buf_.push_back(gyro0);
+
         Matrix3f I   = Matrix3f::Identity();
 
         noise_.setZero();
@@ -109,7 +111,7 @@ public:
 
 
     // integration
-    void push_back(double dt, Vector3f accl, Vector3f gyro) {
+    void push_back(double dt, const Vector3f& accl, const Vector3f& gyro) {
         dt_buf_.push_back(dt);
         accl_buf_.push_back(accl);
         gyro_buf_.push_back(gyro);
@@ -137,7 +139,7 @@ public:
         }
     }
 
-    void integrate(double dt, Vector3f accl, Vector3f gyro) {
+    void integrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
 
         midPointIntegrate(dt, accl, gyro);
 
@@ -156,10 +158,10 @@ public:
     }
 
 
-    void midPointIntegrate(float dt, Vector3f accl, Vector3f gyro) {
+    void midPointIntegrate(float dt, const Vector3f& accl, const Vector3f& gyro) {
         const float dt2 = dt*dt;
         
-        Vector3f gyro_mid = (gyro + gyro_0_)/2 - gyro_bias_;
+        Vector3f gyro_mid    = (gyro + gyro_0_)/2 - gyro_bias_;
         Vector3f gyro_mid_dt = gyro_mid*dt;
 
         Quaternionf q_k0 = delta_q_;
