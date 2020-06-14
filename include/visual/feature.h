@@ -23,7 +23,7 @@ public:
     int ref_frame_id_;
 
     float inv_d_;
-    Vector3f pt3d_;
+    Vector3d pt3d_;
 
     vector<Vector3f>  vis_fs_;
     vector<Vector2f>  vis_uv_;
@@ -39,7 +39,7 @@ public:
         vis_uv_.push_back(uv);
 
         inv_d_ = -1;
-        pt3d_ = Vector3f(0, 0, -1);
+        pt3d_ = Vector3d(0, 0, -1);
     }
 
     int size() const {

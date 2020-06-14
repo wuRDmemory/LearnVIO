@@ -16,7 +16,5 @@ using namespace std;
 using namespace cv;
 using namespace Eigen;
 
-
-
-int relativeRT(map<int, Feature*>& all_ftr, Matrix3f& Rcr, Vector3f& tcr, int window_size);
+int relativeRT(map<int, Feature*>& all_ftr, Matrix3d& Rcr, Vector3d& tcr, int window_size);
 

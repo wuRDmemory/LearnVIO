@@ -190,29 +190,29 @@ namespace cv {
     }
 }
 
-Vector3f singleTriangle(Vector3f& f1, Vector3f& f2, const Matrix3f& R21, const Vector3f& t21) {
-    Matrix<float, 3, 2> A;
-    Vector3f b = t21;
+Vector3d singleTriangle(Vector3d f1, Vector3d f2, const Matrix3d& R21, const Vector3d& t21) {
+    Matrix<double, 3, 2> A;
+    Vector3d b = t21;
 
     A.col(0) =   R21*f1;
     A.col(1) = -1.0f*f2;
 
-    Matrix2f ATA = A.transpose()*A;
-    Vector2f ATb = A.transpose()*b;
+    Matrix2d ATA = A.transpose()*A;
+    Vector2d ATb = A.transpose()*b;
 
     if (ATA.determinant() < 1.0e-5f) {
-        return Vector3f(0,0,-1);
+        return Vector3d(0,0,-1);
     }
 
-    Vector2f x = -ATA.inverse()*ATb;
+    Vector2d x = -ATA.inverse()*ATb;
 
-    Vector3f pt3d1 = f1*x(0);
-    Vector3f pt3d2 = R21.transpose()*(f2*x(1) - t21);
+    Vector3d pt3d1 = f1*x(0);
+    Vector3d pt3d2 = R21.transpose()*(f2*x(1) - t21);
 
     return (pt3d1+pt3d2)/2;
 }
 
-int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3f& Rcr, Vector3f& tcr) {
+int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3d& Rcr, Vector3d& tcr) {
     if (pts1.size() <= 15) {
         return false;
     }
@@ -223,22 +223,18 @@ int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, 
     cv::Mat rot, trans;
     int inlier_cnt = cv::recoverPose(E, pts1, pts2, cameraMatrix, rot, trans, mask);
 
-    for (int i = 0; i < 3; i++) {   
-        tcr(i) = trans.at<double>(i, 0);
-        for (int j = 0; j < 3; j++)
-            Rcr(i, j) = rot.at<double>(i, j);
-    }
+    cv::cv2eigen(rot, Rcr);
+    cv::cv2eigen(trans, tcr);
     
     return inlier_cnt;
 }
 
+int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vector<FrameStruct*>& all_frames) {
+    const FrameStruct& frame_r = *(all_frames[id1]);
+    const FrameStruct& frame_c = *(all_frames[id2]);
 
-int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vector<FrameStruct>& all_frames) {
-    const FrameStruct& frame_r = all_frames[id1];
-    const FrameStruct& frame_c = all_frames[id2];
-
-    const Matrix3f& Rcr = frame_c.Rcw_;
-    const Vector3f& tcr = frame_c.tcw_;
+    const Matrix3d& Rcr = frame_c.Rcw_;
+    const Vector3d& tcr = frame_c.tcw_;
 
     set<int> covisual;
     const set<int>& set1 = frame_r.feature_ids_;
@@ -253,10 +249,10 @@ int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vecto
             continue;
         }
 
-        Vector3f f1 = ftr->getF(id1);
-        Vector3f f2 = ftr->getF(id2);
+        Vector3d f1 = ftr->getF(id1).cast<double>();
+        Vector3d f2 = ftr->getF(id2).cast<double>();
 
-        Vector3f pt3d = singleTriangle(f1, f2, Rcr, tcr);
+        Vector3d pt3d = singleTriangle(f1, f2, Rcr, tcr);
         if (pt3d.z() < 0) {
             continue;
         }
@@ -268,7 +264,7 @@ int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vecto
     return cnt;
 }
 
-int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Matrix3f& Rcr, Vector3f& tcr) {
+int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Matrix3d& Rcr, Vector3d& tcr) {
     
     int cnt = 0;
     vector<Point3f> point3d;
@@ -303,45 +299,39 @@ int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Mat
     }
 
     cv::Rodrigues(r, R);
-    Matrix3d Rcrd;
-    Vector3d tcrd;
-
-    cv::cv2eigen(R, Rcrd);
-    cv::cv2eigen(t, tcrd);
-
-    Rcr = Rcrd.cast<float>();
-    tcr = tcrd.cast<float>();
+    cv::cv2eigen(R, Rcr);
+    cv::cv2eigen(t, tcr);
 
     return 1;
 }
 
-int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f& Rcl, Vector3f& tcl, int l) {
+int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct*>& frames, Matrix3d& Rcl, Vector3d& tcl, int l) {
     int frame_nums = frames.size();
 
     // triangle all point l and current see
-    frames[0].Rcw_.setIdentity();
-    frames[1].tcw_.setZero();
+    frames[0]->Rcw_.setIdentity();
+    frames[1]->tcw_.setZero();
 
-    frames.back().Rcw_ = Rcl;
-    frames.back().tcw_ = tcl;
+    frames.back()->Rcw_ = Rcl;
+    frames.back()->tcw_ = tcl;
 
     trianglesTwoFrame(l, frame_nums-1, all_ftr, frames);
 
     // from newest to l
     vector<int> fails;
 
-    Matrix3f Rcw = Rcl;
-    Vector3f tcw = tcl;
+    Matrix3d Rcw = Rcl;
+    Vector3d tcw = tcl;
     for (int i = frame_nums-2; i > l; i--) {
 
-        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
         if (ret == 0) {
             fails.push_back(i);
             continue;
         }
 
-        frames[i].Rcw_ = Rcw;
-        frames[i].tcw_ = tcw;
+        frames[i]->Rcw_ = Rcw;
+        frames[i]->tcw_ = tcw;
         // triangle 3D point by two frame
         trianglesTwoFrame(l, i, all_ftr, frames);
     }
@@ -351,14 +341,14 @@ int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f
     // from lastest to l
     for (int i = 0; i < l; i++) {
 
-        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
         if (ret == 0) {
             fails.push_back(i);
             continue;
         }
 
-        frames[i].Rcw_ = Rcw;
-        frames[i].tcw_ = tcw;
+        frames[i]->Rcw_ = Rcw;
+        frames[i]->tcw_ = tcw;
         // triangle 3D point by two frame
         trianglesTwoFrame(l, i, all_ftr, frames);
     }
@@ -369,7 +359,7 @@ int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f
         tcw.setZero(); 
         
         int i = *iter;
-        int ret = solveRTByPnP(i, all_ftr, frames[i].feature_ids_, Rcw, tcw);
+        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
         
         if (ret == 0) {
             iter++;
@@ -401,26 +391,26 @@ int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f
             continue;
         }
 
-        Vector3f f1 = ftr->vis_fs_[0];
-        Vector3f f2 = ftr->vis_fs_.back();
+        Vector3d f1 = ftr->vis_fs_[0].cast<double>();
+        Vector3d f2 = ftr->vis_fs_.back().cast<double>();
 
-        Matrix3f Rc1w = frames[ftr->ref_frame_id_].Rcw_;
-        Vector3f tc1w = frames[ftr->ref_frame_id_].tcw_;
+        Matrix3d Rc1w = frames[ftr->ref_frame_id_]->Rcw_;
+        Vector3d tc1w = frames[ftr->ref_frame_id_]->tcw_;
 
-        Matrix3f Rc2w = frames[ftr->ref_frame_id_+ftr->size()-1].Rcw_;
-        Vector3f tc2w = frames[ftr->ref_frame_id_+ftr->size()-1].tcw_;
+        Matrix3d Rc2w = frames[ftr->ref_frame_id_+ftr->size()-1]->Rcw_;
+        Vector3d tc2w = frames[ftr->ref_frame_id_+ftr->size()-1]->tcw_;
 
-        Matrix3f R21  = Rc2w*Rc1w.transpose();
-        Vector3f t21  = tc2w - R21*tc1w;
+        Matrix3d R21  = Rc2w*Rc1w.transpose();
+        Vector3d t21  = tc2w - R21*tc1w;
 
-        Vector3f pt3d = singleTriangle(f1, f2, R21, t21);
+        Vector3d pt3d = singleTriangle(f1, f2, R21, t21);
 
         if (pt3d.z() < 0) {
             untriangle_point_cnt++;
             continue;
         } 
 
-        Vector3f pt3d_w = Rc1w.transpose()*(pt3d - tc1w);
+        Vector3d pt3d_w = Rc1w.transpose()*(pt3d - tc1w);
 
         ftr->pt3d_ = pt3d_w;
         vaild_point_cnt++;
@@ -430,9 +420,73 @@ int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f
     LOGI("[global SFM] unvalid points:    %d|%d=%.2f", unvaild_point_cnt,    (int)all_ftr.size(), unvaild_point_cnt/(float)all_ftr.size());
     LOGI("[global SFM] untriangle points: %d|%d=%.2f", untriangle_point_cnt, (int)all_ftr.size(), untriangle_point_cnt/(float)all_ftr.size());
 
-    for (int i = 0; i < frames.size(); i++) {
-        cout << i << ": " << frames[i].tcw_.transpose() << endl;
+    // BA
+    
+
+    // move the relative RT to first frame
+    Matrix3d Rwl;
+    Vector3d twl;
+
+    int i = 0;
+    for (FrameStruct* frame_i : frames) {
+        if (i == 0) {
+            Rwl = frame_i->Rcw_;
+            twl = frame_i->tcw_;
+
+            frame_i->Rcw_.setIdentity();
+            frame_i->tcw_.setZero();
+        } 
+        else {
+            Matrix3d Ril = frame_i->Rcw_;
+            Vector3d til = frame_i->tcw_;
+
+            Matrix3d Rwi = Rwl*Ril.transpose();
+            Vector3d twi = twl-Rwi*til;
+
+            frame_i->Rcw_ = Rwi.transpose();
+            frame_i->tcw_ = Rwi.transpose()*twi*-1;
+        }
+
+        i++;
+        // cout << i << ": " << frame_i.tcw_.transpose() << endl;
     }
+
+    return 1;
+}
+
+Vector3d computeGyroBias(vector<FrameStruct*>& frames) {
+    Matrix3d A;
+    Vector3d b;
+
+    for (int i = 1; i < frames.size(); i++) {
+        // adjacent two frame
+        FrameStruct* frame_i = frames[i-1];
+        FrameStruct* frame_j = frames[i];
+
+        PreIntegrate* preinte = frames[i]->preintegrate_;
+        
+        // 
+        Quaterniond Qij_v(frame_i->Rcw_*frame_j->Rcw_.transpose());
+        Quaterniond Qij_i = preinte->delta_q_.cast<double>();
+
+        Matrix3d Jacobian = preinte->Jacobian_.block<3, 3>(J_OR, J_OBW).cast<double>();
+        Vector3d Error    = (Qij_v.inverse()*Qij_i).vec();
+
+        A.noalias() += Jacobian.transpose()*Jacobian;
+        b.noalias() += 2*Jacobian.transpose()*Error;
+    }
+
+    Vector3d delta_bg = A.ldlt().solve(-b);
+
+    // TODO: check it
+
+    return delta_bg;
+}
+
+int visualInertialAlign(vector<FrameStruct*>& frames) {    
+    Vector3d bias_g = computeGyroBias(frames);
+
+    cout << bias_g.transpose() << endl;
 
     return 1;
 }

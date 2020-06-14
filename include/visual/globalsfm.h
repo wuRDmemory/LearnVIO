@@ -19,8 +19,8 @@ using namespace Eigen;
 class FrameStruct {
 public:
     PreIntegrate* preintegrate_;
-    Matrix3f      Rcw_;
-    Vector3f      tcw_;
+    Matrix3d      Rcw_;
+    Vector3d      tcw_;
     set<int>      feature_ids_;
     double        t_;
 
@@ -36,5 +36,8 @@ public:
     }
 };
 
-int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3f& Rcr, Vector3f& tcr);
-int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct>& frames, Matrix3f& Rcl, Vector3f& tcl, int l);
+int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3d& Rcr, Vector3d& tcr);
+
+int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct*>& frames, Matrix3d& Rcl, Vector3d& tcl, int l);
+
+int visualInertialAlign(vector<FrameStruct*>& frames);

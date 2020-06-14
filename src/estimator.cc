@@ -148,8 +148,8 @@ bool Estimator::structInitial() {
         }
     }
 
-    Matrix3f Rcr;
-    Vector3f tcr;
+    Matrix3d Rcr;
+    Vector3d tcr;
     int l = relativeRT(feature_manager_.all_ftr_, Rcr, tcr, FEN_WINDOW_SIZE);
     if ( l < 0 ) {
         LOGI("[struct initial] can not get good RT, failed!!");
@@ -158,11 +158,12 @@ bool Estimator::structInitial() {
 
     LOGI("[struct initial] get a good RT");
 
-    vector<FrameStruct> all_frames;
+    vector<FrameStruct*> all_frames;
     for (auto& pir : all_frames_) {
-        all_frames.push_back(pir.second);
+        all_frames.push_back(&pir.second);
     }
     
+    // global SFM
     int ret = globalSFM(feature_manager_.all_ftr_, all_frames, Rcr, tcr, l);
     if ( ret == 0 ) {
         return false;
@@ -170,8 +171,11 @@ bool Estimator::structInitial() {
 
     int i = 0;
     for (auto& pir : all_frames_) {
-        pir.second = all_frames[i];
+        cout << i++ << ": " << pir.second.tcw_.transpose() << endl;
     }
+
+    // visual and IMU alignment
+    visualInertialAlign(all_frames);
 
     return true;
 }

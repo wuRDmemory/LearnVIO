@@ -39,6 +39,10 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 # EIGEN
 include_directories(/usr/include/eigen3/)
 
+# ceres
+find_package(Ceres REQUIRED)
+include_directories(${CERES_INCLUDE_DIRS})
+
 # header
 include_directories(${PROJECT_SOURCE_DIR}/include/)
 include_directories(${PROJECT_SOURCE_DIR}/include/inertial/)
@@ -63,7 +67,7 @@ add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${INR_FILES
 target_link_libraries(feature_track_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_executable(front_end_node front_end_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES} ${UTL_FILES} ${INI_FILES})
-target_link_libraries(front_end_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(front_end_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
 
 #############
 ## Install ##

@@ -5,7 +5,7 @@
 #include "../../include/util/log.h"
 
 
-int relativeRT(map<int, Feature*>& all_ftr, Matrix3f& Rcr, Vector3f& tcr, int window_size) {
+int relativeRT(map<int, Feature*>& all_ftr, Matrix3d& Rcr, Vector3d& tcr, int window_size) {
     // get a relative RT
     vector<Point2f> ref_pts;
     vector<Point2f> cur_pts;
