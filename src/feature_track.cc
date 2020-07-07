@@ -3,6 +3,7 @@
 #include "../include/util/config.h"
 #include "../include/util/tick.h"
 
+int image_id  =0;
 int FeatureTrack::id = 0;
 
 FeatureTrack::FeatureTrack() {
@@ -65,7 +66,29 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
             cv::goodFeaturesToTrack(curr_image_, pts_new_, N, 0.01, MIN_DIST, mask_);
             ROS_DEBUG("[read image] Fetch feature %d done! %lf s", (int)pts_new_.size(), tick.delta_time());
         }
-    } else {
+
+        if (image_id < 20){   // test match
+            cv::Mat image;
+            cv::addWeighted(prev_image_, 0.5, curr_image_, 0.5, 0, image);
+            cv::cvtColor(image, image, cv::COLOR_GRAY2BGR);
+
+            for (int i = 0; i < curr_pts_.size(); i++) {
+                int r = cv::theRNG().uniform(0, 255);
+                int g = cv::theRNG().uniform(0, 255);
+                int b = cv::theRNG().uniform(0, 255);
+
+                cv::circle(image, prev_pts_[i], 2, cv::Scalar(r, g, b), 1);
+                cv::circle(image, curr_pts_[i], 2, cv::Scalar(r, g, b), 1);
+                cv::line(image, prev_pts_[i], curr_pts_[i], cv::Scalar(r, g, b), 1);
+
+                cv::putText(image, to_string(ids_[i]), curr_pts_[i], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0));
+            }
+
+            string name = "/home/ubuntu/catkin_ws/src/learn_vio/images/image"+ to_string(image_id++)+".png";
+            cv::imwrite(name.c_str(), image);
+        }
+    } 
+    else {
         pts_new_.clear();
     }
 
@@ -137,7 +160,7 @@ void FeatureTrack::rejectWithF() {
     }
 }
 
-void FeatureTrack::setMask() {
+void FeatureTrack:: setMask() {
     if (FISHEYE) {
         mask_ = fisheye_mask_.clone();
     }
@@ -149,32 +172,38 @@ void FeatureTrack::setMask() {
     ROS_DEBUG("[set mask] Begin build mask");
 
     // track status
-    vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
+    // vector<pair<int, pair<pair<cv::Point2f, cv::Point2f>, int> > > cnt_pts_id;
+    vector<pair<int, pair<pair<cv::Point2f, cv::Point2f>, int> > > cnt_pts_id;
+    cnt_pts_id.reserve(curr_pts_.size());
 
-    for (unsigned int i = 0; i < curr_pts_.size(); i++)
-        cnt_pts_id.push_back(make_pair(track_cnt_[i], make_pair(curr_pts_[i], ids_[i])));
+    for (unsigned int i = 0; i < curr_pts_.size(); i++) {
+        cnt_pts_id.emplace_back(track_cnt_[i], make_pair(make_pair(prev_pts_[i], curr_pts_[i]), ids_[i]));
+    }
 
-    sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b)
+    sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](pair<int, pair<pair<cv::Point2f, cv::Point2f>, int> > &a, pair<int, pair<pair<cv::Point2f, cv::Point2f>, int> > &b)
          {
             return a.first > b.first;
          });
 
+    prev_pts_.clear();
     curr_pts_.clear();
     ids_.clear();
     track_cnt_.clear();
 
     for (auto &it : cnt_pts_id)
     {
-        if (mask_.at<uchar>(it.second.first) == 255)
+        if (mask_.at<uchar>(it.second.first.second) == 255)
         {
-            curr_pts_.push_back(it.second.first);
+            prev_pts_.push_back(it.second.first.first);
+            curr_pts_.push_back(it.second.first.second);
             ids_.push_back(it.second.second);
             track_cnt_.push_back(it.first);
-            cv::circle(mask_, it.second.first, MIN_DIST, 0, -1);
+            cv::circle(mask_, it.second.first.second, MIN_DIST, 0, -1);
         }
     }
     
     ROS_DEBUG("[set mask] build mask done! %lf ms", tick.delta_time());
+
 }
 
 void FeatureTrack::undistortPoints() {

@@ -11,16 +11,16 @@ camera:
   width:  752
   height: 480
   
-  d0: -2.917e-01
-  d1: 8.228e-02
-  d2: 0.00
+  d0: -0.28340811
+  d1: 0.07395907
+  d2: 0.00019359
   d3: 0.00
   d4: 0.00
 
-  fx: 4.616e+02
-  fy: 4.603e+02
-  cx: 3.630e+02
-  cy: 2.481e+02
+  fx: 458.654
+  fy: 457.296
+  cx: 367.215
+  cy: 248.375
 
 # Extrinsic parameter between IMU and Camera.
 estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.

@@ -41,6 +41,7 @@ include_directories(/usr/include/eigen3/)
 
 # ceres
 find_package(Ceres REQUIRED)
+message("-- Ceres Version: ${CERES_VERSION}")
 include_directories(${CERES_INCLUDE_DIRS})
 
 # header
@@ -59,15 +60,30 @@ file(GLOB UTL_FILES ${PROJECT_SOURCE_DIR}/src/util/*.cc)
 file(GLOB INI_FILES ${PROJECT_SOURCE_DIR}/src/initial/*.cc)
 file(GLOB CMR_FILES ${PROJECT_SOURCE_DIR}/camera/*.cc)
 
+message(${VIS_FILES})
+
+set(ALL_SOURCE 
+    ${SRC_FILES} 
+    ${INR_FILES} 
+    ${VIS_FILES}
+    ${UTL_FILES}
+    ${INI_FILES}
+    ${CMR_FILES})
+
+list(APPEND ALL_LIBS
+    ${catkin_LIBRARIES} 
+    ${OpenCV_LIBS} 
+    ${CERES_LIBRARIES}   
+)
 
 # compile options
 add_definitions(-DUSE_ROS)
 
-add_executable(feature_track_node feature_track_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES} ${UTL_FILES} ${INI_FILES})
-target_link_libraries(feature_track_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_executable(feature_track_node feature_track_node.cc ${ALL_SOURCE})
+target_link_libraries(feature_track_node ${ALL_LIBS})
 
-add_executable(front_end_node front_end_node.cc ${SRC_FILES} ${INR_FILES} ${VIS_FILES} ${CMR_FILES} ${UTL_FILES} ${INI_FILES})
-target_link_libraries(front_end_node ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})
+add_executable(front_end_node front_end_node.cc ${ALL_SOURCE})
+target_link_libraries(front_end_node ${ALL_LIBS})
 
 #############
 ## Install ##

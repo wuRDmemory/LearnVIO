@@ -69,7 +69,7 @@ public:
 
 public:
 
-    PreIntegrate() = delete;
+    PreIntegrate() {}
     PreIntegrate(const Vector3f& accl0,       const Vector3f& gyro0, 
                  const Vector3f& bias_accl,  const Vector3f& bias_gyro):
                  accl_0_(accl0),        gyro_0_(gyro0), 
@@ -108,7 +108,6 @@ public:
     ~PreIntegrate() {
         ;
     }
-
 
     // integration
     void push_back(double dt, const Vector3f& accl, const Vector3f& gyro) {
@@ -157,7 +156,6 @@ public:
         sum_dt_ += dt;
     }
 
-
     void midPointIntegrate(float dt, const Vector3f& accl, const Vector3f& gyro) {
         const float dt2 = dt*dt;
         
@@ -200,7 +198,7 @@ public:
             F.block<3, 3>(J_OP, J_OBW) = 0.25*(R_1*accl_b1_x*dt2*dt);
 
             F.block<3, 3>(J_OR, J_OR)  = I - gyro_mid_x*dt;
-            F.block<3, 3>(J_OR, J_OBW) = -I*dt;
+            F.block<3, 3>(J_OR, J_OBW) = I*(-dt);
 
             F.block<3, 3>(J_OV, J_OR)  = 0.5*(item_accl_k0 + item_accl_k1)*dt;
             F.block<3, 3>(J_OV, J_OBA) = -0.5*(R_0+R_1)*dt;
@@ -222,7 +220,7 @@ public:
             V.block<3, 3>(J_OV, V_ONW1) = 0.5*R_1_A_1_x*dt*0.5*dt;
 
             // update jacobian
-            Jacobian_ = F*Jacobian_;
+            Jacobian_   = F*Jacobian_;
             
             // update covariance
             covariance_ = F*covariance_*F.transpose() + V*noise_*V.transpose();
@@ -236,5 +234,12 @@ public:
 
         result_accl_bias_ = accl_bias_;
         result_gyro_bias_ = gyro_bias_;
+    }
+
+    Matrix<double, 15, 1> 
+    evaluate(const Matrix3d& Rwi, const Vector3d& twi, const Vector3d& vwi, const Vector3d& bai, const Vector3d& bgi, 
+             const Matrix3d& Rwj, const Vector3d& twj, const Vector3d& vwj, const Vector3d& baj, const Vector3d& bgj) {
+        
+        
     }
 };

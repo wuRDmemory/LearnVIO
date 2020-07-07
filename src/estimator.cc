@@ -75,9 +75,9 @@ void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
         accl_b0  = RS_[frame_count_]*(accl_0_-BAS_[frame_count_]);
         
         RS_[frame_count_] *= vec2quat<float>(gyro_mid);
-        accl_b1   = RS_[frame_count_]*(accl-BAS_[frame_count_]);
+        accl_b1  = RS_[frame_count_]*(accl   -BAS_[frame_count_]);
 
-        accl_mid  = (accl_b0 + accl_b1)/2 - g_;
+        accl_mid = (accl_b0 + accl_b1)/2 - g_;
         PS_[frame_count_] += VS_[frame_count_]*dt + 0.5*accl_mid*dt*dt;
         VS_[frame_count_] += accl_mid*dt;
     }
@@ -102,7 +102,7 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
 
     FrameStruct this_frame(image, timestamp);
     this_frame.preintegrate_ = temp_preintegrate_;
-    temp_preintegrate_ = new PreIntegrate(accl_0_, gyro_0_, BAS_[frame_count_], BGS_[frame_count_]);
+    temp_preintegrate_       = new PreIntegrate(accl_0_, gyro_0_, BAS_[frame_count_], BGS_[frame_count_]);
     all_frames_.insert(make_pair(timestamp, this_frame));
 
     if (!initial_) {
@@ -110,6 +110,17 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
             // enough frame
             // initialize
             bool success = structInitial();
+            if (!success) {
+                // initial success 
+                initial_ = true;
+                solveOdometry();
+                slideWindow(margin_old);
+                // TODO: remove the unvisual feature in feature manager
+
+            } 
+            else {
+                slideWindow(margin_old);
+            }
         }
         else {
             frame_count_++;
@@ -117,12 +128,110 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
     }
     else {
         // initial has done
+
     }
+}
+
+bool Estimator::solveOdometry() {
+    // solve the current frame's pose
+    if (frame_count_ < FEN_WINDOW_SIZE) {
+        return false;
+    }
+
+    if (initial_) {
+        // BA
+        double pose_params[FEN_WINDOW_SIZE+1][7];
+        double velo_params[FEN_WINDOW_SIZE+1][9];
+        double point_params[1000];
+
+        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+            pose_params[i][0] = PS_[i].x();            
+            pose_params[i][1] = PS_[i].y();            
+            pose_params[i][2] = PS_[i].z();            
+            pose_params[i][3] = RS_[i].x();
+            pose_params[i][4] = RS_[i].y();
+            pose_params[i][5] = RS_[i].z();
+            pose_params[i][6] = RS_[i].w();
+
+            velo_params[i][0] = VS_[i].x();
+            velo_params[i][1] = VS_[i].y();
+            velo_params[i][2] = VS_[i].z();
+            velo_params[i][3] = BAS_[i].x();
+            velo_params[i][4] = BAS_[i].y();
+            velo_params[i][5] = BAS_[i].z();
+            velo_params[i][6] = BGS_[i].x();
+            velo_params[i][7] = BGS_[i].y();
+            velo_params[i][8] = BGS_[i].z();
+        }
+
+        
+    }
+
+    return true;
+}
+
+bool Estimator::solveNewFrame(map<int, Feature*> &all_features, Matrix3f Rwb, Vector3f twb) {
+    vector<cv::Point3f> point3d;
+    vector<cv::Point2f> point2d;
+
+    Matrix3f Rbc = Rics[0].cast<float>();
+    Vector3f tbc = tics[0].cast<float>();
+
+    for (auto &id_ftr : all_features) {
+        int       id = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (!ftr->contains(FEN_WINDOW_SIZE)) {
+            continue;
+        }
+
+        int ref_id = ftr->ref_frame_id_;
+        Matrix3f Rwbr = RS_[ref_id].toRotationMatrix();
+        Vector3f twbr = PS_[ref_id];
+
+        Matrix3f Rwcr;
+        Vector3f twcr;
+        cvtPoseFromBodyToCamera(Rwbr, twbr, Rbc, tbc, Rwcr, twcr);
+
+        Vector3f Pw   = Rwcr*(ftr->vis_fs_[0]/ftr->inv_d_) + twcr;
+        Vector3f pc   = ftr->getF(FEN_WINDOW_SIZE);
+        assert(pc == ftr->vis_fs_.back());
+
+        point3d.emplace_back(Pw.x(), Pw.y(), Pw.z());
+        point2d.emplace_back(pc.x(), pc.y());
+    }
+
+    Matrix3f Rwc;
+    Vector3f twc;
+    cvtPoseFromBodyToCamera(Rwb, twb, Rbc, tbc, Rwc, twc);
+
+    Matrix3d Rcw = Rwc.transpose().cast<double>();
+    Vector3d tcw = twc.cast<double>()*Rcw*-1;
+
+    cv::Mat cvRcw, rvec, tvec;
+    cv::Mat K = cv::Mat::eye(3, 3, CV_64F);
+
+    cv::eigen2cv(Rcw,  cvRcw);
+    cv::eigen2cv(tcw,  tvec);
+    cv::Rodrigues(cvRcw, rvec);
+
+    cv::solvePnP(point3d, point2d, K, cv::Mat(), rvec, tvec, true, cv::SOLVEPNP_EPNP);
+
+    cv::Rodrigues(rvec, cvRcw);
+    cv::cv2eigen(cvRcw, Rcw);
+    cv::cv2eigen(tvec,  tcw);
+
+    Rwc = Rcw.transpose().cast<float>();
+    twc = (Rcw.transpose()*tcw*-1).cast<float>();
+
+    cvtPoseFromCameraToBody(Rwc, twc, Rbc, tbc, Rwb, twb);
+
+    return true;
 }
 
 bool Estimator::structInitial() {
 
-    {   // check 
+    {   // check imu 
         map<double, FrameStruct>::iterator frame_it;
         Vector3f sum_g;
         for (frame_it = all_frames_.begin(), frame_it++; frame_it != all_frames_.end(); frame_it++) {
@@ -147,35 +256,199 @@ bool Estimator::structInitial() {
             //return false;
         }
     }
-
-    Matrix3d Rcr;
-    Vector3d tcr;
-    int l = relativeRT(feature_manager_.all_ftr_, Rcr, tcr, FEN_WINDOW_SIZE);
-    if ( l < 0 ) {
-        LOGI("[struct initial] can not get good RT, failed!!");
-        return false;
-    }
-
-    LOGI("[struct initial] get a good RT");
-
+    
+    const int N = FEN_WINDOW_SIZE+1;
     vector<FrameStruct*> all_frames;
+    all_frames.reserve(N);
     for (auto& pir : all_frames_) {
         all_frames.push_back(&pir.second);
     }
-    
-    // global SFM
-    int ret = globalSFM(feature_manager_.all_ftr_, all_frames, Rcr, tcr, l);
-    if ( ret == 0 ) {
+
+    if (0 == visualOnlyInit(feature_manager_.all_ftr_, all_frames)) {
+        LOGW("[struct initial] struct initial failed!!!");
         return false;
     }
 
-    int i = 0;
-    for (auto& pir : all_frames_) {
-        cout << i++ << ": " << pir.second.tcw_.transpose() << endl;
+    // visual inertial alignment
+    Vector3d g_c0;
+    double   s;
+    if (0 == visualInertialAlign(all_frames, Rics[0], tics[0], g_c0, s)) {
+        LOGW("[struct initial] visual inertial alignment failed!!!");
+        return false;
     }
 
-    // visual and IMU alignment
-    visualInertialAlign(all_frames);
+    // alignment is success
+    {   // build Qc0b, vc0b, pc0b
+        Matrix3d qc0b[N];
+        Vector3d vc0b[N];
+        Vector3d pc0b[N];
 
+        int i = 0;
+        for (FrameStruct *frame: all_frames) {
+            const Matrix3d &Rckcw = frame->Rcw_;
+            const Vector3d &tckcw = frame->tcw_;
+
+            qc0b[i] = Rckcw.transpose()*Rics[0].transpose();           // c0_Rck*ck_R_bk
+            pc0b[i] = Rckcw.transpose()*tckcw*-s - qc0b[i]*tics[0];    // c0_p_ck - c0_R_bk*bk_p_ck
+            vc0b[i] = qc0b[i]*frame->Vbk_;                             // c0_R_bk*bk_v_bk
+            i++;
+        }
+
+        // temporary set camera0 coordination as world
+        for (i = N-1; i >= 0; i--) {
+            RS_[i] = Quaterniond(qc0b[i]).cast<float>();
+            PS_[i] = (pc0b[i]-pc0b[0]).cast<float>();
+            VS_[i] = (vc0b[i]).cast<float>();
+
+            BAS_[i] = all_frames[i]->bias_a_.cast<float>();
+            BGS_[i] = all_frames[i]->bias_g_.cast<float>();
+
+            preintegrates_[i]->reintegrate(Vector3f(0, 0, 0), BGS_[i]);
+        }
+    }
+
+    {   // re-triangle all features
+        Matrix3f qcc0[N];
+        Vector3f tcc0[N];
+        Matrix3f Rc0c;
+        Vector3f tc0c;
+
+        Matrix3f Ric = Rics[0].cast<float>();
+        Vector3f tic = tics[0].cast<float>();
+
+        int i = 0;
+        for (i = 0; i < N; i++) {
+            Rc0c = RS_[i].toRotationMatrix()*Ric;      // c0_R_c = c0_R_bk*bk_R_ck
+            tc0c = PS_[i] + RS_[i]*tic;                // c0_P_c = c0_P_bk + c0_R_bk*bk_P_ck
+            
+            qcc0[i] = Rc0c.transpose();
+            tcc0[i] = Rc0c.transpose()*tc0c*-1;
+        }
+
+        feature_manager_.trianglesInitial(qcc0, tcc0);
+    }
+
+    // rotate the c0 to world coordinate
+    Matrix3f Rw1c0 = gravity2Rnb<float>(g_c0.cast<float>());
+    float    yaw   = Rnb2ypr<float>(Rw1c0).x();
+    Matrix3f Rww1  = ypr2Rnb<float>(Vector3f{-yaw, 0, 0});
+
+    Matrix3f Rwc0 = Rww1*Rw1c0;
+    g_ = Rwc0*g_c0.cast<float>();
+
+    // change world frame from c0 to world
+    for (int i = 0; i < N; i++) {
+        RS_[i] = Rwc0*RS_[i];
+        PS_[i] = Rwc0*PS_[i];
+        VS_[i] = Rwc0*VS_[i];
+    }
+
+    FILE* file;
+    file = fopen("./poses.txt", "w");
+    for (int i = 0; i < N; i++) {
+        fprintf(file, "%lf\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+                    timestamp_[i], RS_[i].x(), RS_[i].y(), RS_[i].z(), RS_[i].w(), 
+                                   PS_[i].x(), PS_[i].y(), PS_[i].z());
+    }
+    fclose(file);
+
+    return true;
+}
+
+bool Estimator::slideWindow(bool margin_old) {
+    assert(frame_count_ == FEN_WINDOW_SIZE);
+    if (margin_old) {
+        double t0 = timestamp_[0];
+        // marg oldest frame
+        for (int i = 0; i < FEN_WINDOW_SIZE; i++) {
+            swap(timestamp_[i], timestamp_[i+1]);
+
+            swap(preintegrates_[i], preintegrates_[i+1]);
+            
+            swap(RS_[ i], RS_[ i+1]);
+            swap(VS_[ i], VS_[ i+1]);
+            swap(PS_[ i], PS_[ i+1]);
+            swap(BAS_[i], BAS_[i+1]);
+            swap(BGS_[i], BGS_[i+1]);
+        }
+        
+        RS_[ FEN_WINDOW_SIZE] = RS_[ FEN_WINDOW_SIZE-1];
+        VS_[ FEN_WINDOW_SIZE] = VS_[ FEN_WINDOW_SIZE-1];
+        PS_[ FEN_WINDOW_SIZE] = PS_[ FEN_WINDOW_SIZE-1];
+        BAS_[FEN_WINDOW_SIZE] = BAS_[FEN_WINDOW_SIZE-1];
+        BGS_[FEN_WINDOW_SIZE] = BGS_[FEN_WINDOW_SIZE-1];
+        timestamp_.pop_back();
+
+        // build new 
+        if (preintegrates_[FEN_WINDOW_SIZE]) {
+            delete preintegrates_[FEN_WINDOW_SIZE];
+            preintegrates_[FEN_WINDOW_SIZE] = nullptr;
+        }
+
+        if (!initial_) {
+            // remove oldest frame
+            map<double, FrameStruct>::iterator iter;
+            iter = all_frames_.find(t0);
+            assert(iter != all_frames_.end());
+
+            delete(iter->second.preintegrate_);
+            iter->second.preintegrate_ = nullptr;
+
+            for (auto it = all_frames_.begin(); it != iter; it++) {
+                if (it->second.preintegrate_) {
+                    delete(it->second.preintegrate_);
+                }
+                it->second.preintegrate_ = nullptr;
+            }
+
+            all_frames_.erase(all_frames_.begin(), iter);
+            all_frames_.erase(t0);
+        }   
+
+        slideOldFrame();
+    }
+    else {
+        // marg second newest frame
+        auto &accls = preintegrates_[FEN_WINDOW_SIZE]->accl_buf_;
+        auto &gyros = preintegrates_[FEN_WINDOW_SIZE]->gyro_buf_;
+        auto &dts   = preintegrates_[FEN_WINDOW_SIZE]->dt_buf_;
+        for (int i = 1; i < dts.size(); i++) {
+            preintegrates_[FEN_WINDOW_SIZE-1]->push_back(dts[i], accls[i], gyros[i]);
+        }
+        
+        RS_[ FEN_WINDOW_SIZE-1] = RS_[ FEN_WINDOW_SIZE];
+        VS_[ FEN_WINDOW_SIZE-1] = VS_[ FEN_WINDOW_SIZE];
+        PS_[ FEN_WINDOW_SIZE-1] = PS_[ FEN_WINDOW_SIZE];
+        BAS_[FEN_WINDOW_SIZE-1] = BAS_[FEN_WINDOW_SIZE];
+        BGS_[FEN_WINDOW_SIZE-1] = BGS_[FEN_WINDOW_SIZE];
+        timestamp_[FEN_WINDOW_SIZE-1] = timestamp_[FEN_WINDOW_SIZE];
+        timestamp_.pop_back();
+
+        delete(preintegrates_[FEN_WINDOW_SIZE]);
+        preintegrates_[FEN_WINDOW_SIZE] = nullptr;
+
+        slideNewFrame();
+    }
+}
+
+bool Estimator::slideOldFrame() {
+    // remove the oldest frame's feature
+    if (initial_) {
+        // change the feature depth when margin frame 
+        // is reference frame of the feature
+        Quaternionf Rc1c0 = RS_[1].inverse()*RS_[0];          // c1_R_c0 = c1_R_w * w_R_c0
+        Vector3f    tc1c0 = RS_[1].inverse()*(PS_[0]-PS_[1]); // c1_P_c0 = c1_R_w * (w_P_c0 - w_P_c1)
+
+        feature_manager_.removeOldestFrame(Rc1c0, tc1c0);
+    }
+    else {
+        // do not change the feature depth
+        feature_manager_.removeFrame(0);
+    }
+    return true;
+}
+
+bool Estimator::slideNewFrame() {
+    feature_manager_.removeFrame(FEN_WINDOW_SIZE-1);
     return true;
 }

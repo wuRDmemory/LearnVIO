@@ -101,10 +101,18 @@ public:
 
     bool clear();
 
-    int size() const { return all_ftr_.size(); }
+    bool removeFrame(int frame_id);
+
+    bool removeOldestFrame(const Quaternionf &Rcm, const Vector3f &tcm);
 
     bool addNewFeatures(const Image_Type& image_data, int frame_id);
 
+    // triangle all feature
+    bool trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]);
+
+    bool trianglesNew(Matrix3f Rcw[], Vector3f tcw[]);
+
+    int size() const { return all_ftr_.size(); }
 private:
     float computeParallax(Feature* ftr, int frame_id);
 };

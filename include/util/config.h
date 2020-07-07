@@ -3,7 +3,14 @@
 #include <iostream>
 #include <vector>
 
+#include "opencv2/opencv.hpp"
+#include "eigen3/Eigen/Core"
+#include "eigen3/Eigen/Dense"
+#include "opencv/cxeigen.hpp"
+
 using namespace std;
+using namespace cv;
+using namespace Eigen;
 
 extern string CONFIG_PATH;
 extern string IMAGE_TOPIC;
@@ -26,7 +33,11 @@ extern bool PUB_THIS_FRAME;
 
 extern float ACCL_N, GYRO_N;
 extern float ACCL_BIAS_N, GYRO_BIAS_N;
+extern float INIT_DEPTH;
 
 extern int FEN_WINDOW_SIZE;
+
+extern vector<Matrix3d> Rics;
+extern vector<Vector3d> tics;
 
 bool readParameters(string config_path, string vins_path);

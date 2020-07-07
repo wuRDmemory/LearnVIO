@@ -1,6 +1,8 @@
 #include "../../include/visual/globalsfm.h"
 #include "../../include/util/utils.h"
 #include "../../include/util/config.h"
+#include "../../include/visual/globalsfm.h"
+#include "../../include/visual/project_factor.h"
 
 namespace cv {
     void decomposeEssentialMat( InputArray _E, OutputArray _R1, OutputArray _R2, OutputArray _t )
@@ -192,7 +194,7 @@ namespace cv {
 
 Vector3d singleTriangle(Vector3d f1, Vector3d f2, const Matrix3d& R21, const Vector3d& t21) {
     Matrix<double, 3, 2> A;
-    Vector3d b = t21;
+    Vector3d b = -1.0*t21;
 
     A.col(0) =   R21*f1;
     A.col(1) = -1.0f*f2;
@@ -204,12 +206,12 @@ Vector3d singleTriangle(Vector3d f1, Vector3d f2, const Matrix3d& R21, const Vec
         return Vector3d(0,0,-1);
     }
 
-    Vector2d x = -ATA.inverse()*ATb;
+    Vector2d x = ATA.ldlt().solve(ATb);
 
     Vector3d pt3d1 = f1*x(0);
     Vector3d pt3d2 = R21.transpose()*(f2*x(1) - t21);
 
-    return (pt3d1+pt3d2)/2;
+    return (pt3d1+pt3d2)*0.5;
 }
 
 int computeRelativeRT(const vector<Point2f>& pts1, const vector<Point2f>& pts2, Matrix3d& Rcr, Vector3d& tcr) {
@@ -233,8 +235,11 @@ int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vecto
     const FrameStruct& frame_r = *(all_frames[id1]);
     const FrameStruct& frame_c = *(all_frames[id2]);
 
-    const Matrix3d& Rcr = frame_c.Rcw_;
-    const Vector3d& tcr = frame_c.tcw_;
+    const Matrix3d &Rrw = frame_r.Rcw_, &Rcw = frame_c.Rcw_;
+    const Vector3d &trw = frame_r.tcw_, &tcw = frame_c.tcw_;
+
+    const Matrix3d& Rcr = Rcw*Rrw.transpose();
+    const Vector3d& tcr = tcw-Rcr*trw;
 
     set<int> covisual;
     const set<int>& set1 = frame_r.feature_ids_;
@@ -252,13 +257,22 @@ int trianglesTwoFrame(int id1, int id2, map<int, Feature*>& all_ftr, const vecto
         Vector3d f1 = ftr->getF(id1).cast<double>();
         Vector3d f2 = ftr->getF(id2).cast<double>();
 
+        // Matrix<double, 3, 4> pose0, pose1;
+        // pose0.block<3, 3>(0, 0) = Rrw;
+        // pose0.col(3) = trw;
+
+        // pose1.block<3, 3>(0, 0) = Rcw;
+        // pose1.col(3) = tcw;
+
         Vector3d pt3d = singleTriangle(f1, f2, Rcr, tcr);
+        // Vector3d pt3d = trianglePoint(pose0, pose1, f1.head<2>(), f2.head<2>());
         if (pt3d.z() < 0) {
             continue;
         }
 
         cnt ++;
-        ftr->pt3d_ = pt3d;
+        // ftr->pt3d_ = pt3d;
+        ftr->pt3d_ = Rrw.transpose()*(pt3d - trw);
     }
     
     return cnt;
@@ -291,8 +305,8 @@ int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Mat
     cv::eigen2cv(Rcr, R);
     cv::Rodrigues(R, r);
     cv::eigen2cv(tcr, t);
-    cv::Mat K = (cv::Mat_<double>(3,3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
-    bool ret  = cv::solvePnP(point3d, point2d, K, cv::Mat(), r, t, true);
+    cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+    bool ret  = cv::solvePnP(point3d, point2d, K, cv::Mat(), r, t, true, 0);
 
     if (!ret) {
         return 0;
@@ -305,188 +319,137 @@ int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Mat
     return 1;
 }
 
-int globalSFM(map<int, Feature*>& all_ftr, vector<FrameStruct*>& frames, Matrix3d& Rcl, Vector3d& tcl, int l) {
-    int frame_nums = frames.size();
+int globalRefineBA(map<int, Feature*>& all_ftr, vector<FrameStruct*>& frames, int l) {
+    int N = frames.size();
 
-    // triangle all point l and current see
-    frames[0]->Rcw_.setIdentity();
-    frames[1]->tcw_.setZero();
+    // poses
+    vector<pair<double*, double*>> Tcws(N);    
+    for (int i = 0; i < N; i++) {
+        Quaterniond Qcw(frames[i]->Rcw_);
+        Vector3d    tcw(frames[i]->tcw_);
 
-    frames.back()->Rcw_ = Rcl;
-    frames.back()->tcw_ = tcl;
+        double* tcws = new double[3];
+        tcws[0] = tcw.x();
+        tcws[1] = tcw.y();
+        tcws[2] = tcw.z();
 
-    trianglesTwoFrame(l, frame_nums-1, all_ftr, frames);
+        double* qcws = new double[4];
+        qcws[0] = Qcw.w();
+        qcws[1] = Qcw.x();
+        qcws[2] = Qcw.y();
+        qcws[3] = Qcw.z();
 
-    // from newest to l
-    vector<int> fails;
-
-    Matrix3d Rcw = Rcl;
-    Vector3d tcw = tcl;
-    for (int i = frame_nums-2; i > l; i--) {
-
-        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
-        if (ret == 0) {
-            fails.push_back(i);
-            continue;
-        }
-
-        frames[i]->Rcw_ = Rcw;
-        frames[i]->tcw_ = tcw;
-        // triangle 3D point by two frame
-        trianglesTwoFrame(l, i, all_ftr, frames);
+        Tcws[i] = make_pair(tcws, qcws);
     }
 
-    Rcw.setIdentity();
-    tcw.setZero();
-    // from lastest to l
-    for (int i = 0; i < l; i++) {
-
-        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
-        if (ret == 0) {
-            fails.push_back(i);
-            continue;
-        }
-
-        frames[i]->Rcw_ = Rcw;
-        frames[i]->tcw_ = tcw;
-        // triangle 3D point by two frame
-        trianglesTwoFrame(l, i, all_ftr, frames);
-    }
-
-    // re initial failed frames
-    for (auto iter = fails.begin(); iter != fails.end();) {
-        Rcw.setIdentity();
-        tcw.setZero(); 
-        
-        int i = *iter;
-        int ret = solveRTByPnP(i, all_ftr, frames[i]->feature_ids_, Rcw, tcw);
-        
-        if (ret == 0) {
-            iter++;
-            continue;
-        }
-
-        iter = fails.erase(iter);
-    }
-
-    if (!fails.empty()) {
-        LOGW("[global sfm] some frame can not be locate");
-        return 0;
-    }
-
-    // triangle all features
-    int vaild_point_cnt      = 0;
-    int unvaild_point_cnt    = 0;
-    int untriangle_point_cnt = 0;
+    // xyz_point
+    unordered_map<int, double*> xyzs;
     for (auto& pir : all_ftr) {
+        int ftr_id   = pir.first;
         Feature* ftr = pir.second;
+        if (ftr->pt3d_.z() < 0) {
+            continue;
+        }
+
+        xyzs[ftr_id] = new double[3];
+        xyzs[ftr_id][0] = ftr->pt3d_.x();
+        xyzs[ftr_id][1] = ftr->pt3d_.y();
+        xyzs[ftr_id][2] = ftr->pt3d_.z();
+    }
+
+
+    // build BA graph
+    int edge_count = 0;
+    ceres::Problem problem;
+
+    for (int i = 0; i < N; i ++) {
+        FrameStruct* frame = frames[i];
         
-        if (ftr->pt3d_.z() > 0) {
-            vaild_point_cnt ++;
-            continue;
+        ceres::LocalParameterization* local_param = new ceres::QuaternionParameterization();
+        problem.AddParameterBlock(Tcws[i].second, 4, local_param);
+        problem.AddParameterBlock(Tcws[i].first,  3);
+
+        if (i == l) {
+            problem.SetParameterBlockConstant(Tcws[i].second);
         }
 
-        if (ftr->size() < 2) {
-            unvaild_point_cnt ++;
-            continue;
+        if (i == l || i == N-1) {
+            problem.SetParameterBlockConstant(Tcws[i].first);
         }
 
-        Vector3d f1 = ftr->vis_fs_[0].cast<double>();
-        Vector3d f2 = ftr->vis_fs_.back().cast<double>();
+        // scan all feature id
+        for (int ftr_id : frame->feature_ids_) {
+            Feature* ftr = all_ftr[ftr_id];
+            if (ftr->pt3d_.z() < 0) {
+                continue;
+            }
 
-        Matrix3d Rc1w = frames[ftr->ref_frame_id_]->Rcw_;
-        Vector3d tc1w = frames[ftr->ref_frame_id_]->tcw_;
+            if (!xyzs.count(ftr_id)) {
+                continue;
+            }
 
-        Matrix3d Rc2w = frames[ftr->ref_frame_id_+ftr->size()-1]->Rcw_;
-        Vector3d tc2w = frames[ftr->ref_frame_id_+ftr->size()-1]->tcw_;
+            problem.AddParameterBlock(xyzs[ftr_id], 3);
 
-        Matrix3d R21  = Rc2w*Rc1w.transpose();
-        Vector3d t21  = tc2w - R21*tc1w;
+            Vector3f obs = ftr->getF(i);
+            ceres::CostFunction* cost = ReprojectionError3D::Create(obs.x(), obs.y());
 
-        Vector3d pt3d = singleTriangle(f1, f2, R21, t21);
+            problem.AddResidualBlock(cost, NULL, Tcws[i].second, Tcws[i].first, xyzs[ftr_id]);
 
-        if (pt3d.z() < 0) {
-            untriangle_point_cnt++;
-            continue;
-        } 
-
-        Vector3d pt3d_w = Rc1w.transpose()*(pt3d - tc1w);
-
-        ftr->pt3d_ = pt3d_w;
-        vaild_point_cnt++;
+            edge_count ++;
+        }
     }
 
-    LOGI("[global SFM] valid points:      %d|%d=%.2f", vaild_point_cnt,      (int)all_ftr.size(), vaild_point_cnt/(float)all_ftr.size());
-    LOGI("[global SFM] unvalid points:    %d|%d=%.2f", unvaild_point_cnt,    (int)all_ftr.size(), unvaild_point_cnt/(float)all_ftr.size());
-    LOGI("[global SFM] untriangle points: %d|%d=%.2f", untriangle_point_cnt, (int)all_ftr.size(), untriangle_point_cnt/(float)all_ftr.size());
+    cout << "edge count: " << edge_count << endl;
 
-    // BA
-    
+    ceres::Solver::Options options;
+    options.linear_solver_type = ceres::DENSE_SCHUR;
+    options.max_solver_time_in_seconds   = 10.0f;
+    options.minimizer_progress_to_stdout = true;
 
-    // move the relative RT to first frame
-    Matrix3d Rwl;
-    Vector3d twl;
+    ceres::Solver::Summary summary;
+	ceres::Solve(options, &problem, &summary);
 
-    int i = 0;
-    for (FrameStruct* frame_i : frames) {
-        if (i == 0) {
-            Rwl = frame_i->Rcw_;
-            twl = frame_i->tcw_;
+	//std::cout << summary.BriefReport() << "\n";
+	if (summary.termination_type == ceres::CONVERGENCE || summary.final_cost < 5e-03) {
+        LOGI("[vision only BA] Converged");
+    }
+	else {
+        LOGI("[vision only BA] Not converged");
+		return false;
+	}
 
-            frame_i->Rcw_.setIdentity();
-            frame_i->tcw_.setZero();
-        } 
-        else {
-            Matrix3d Ril = frame_i->Rcw_;
-            Vector3d til = frame_i->tcw_;
+    // if converged, re-set pose and landmark pose   
+    for (int i = 0; i < N; i++) {
+        double* tcw = Tcws[i].first;
+        double* qcw = Tcws[i].second;
 
-            Matrix3d Rwi = Rwl*Ril.transpose();
-            Vector3d twi = twl-Rwi*til;
+        frames[i]->Rcw_ = Quaterniond(qcw[0], qcw[1], qcw[2], qcw[3]).toRotationMatrix();
+        frames[i]->tcw_ = Vector3d(tcw[0], tcw[1], tcw[2]);
 
-            frame_i->Rcw_ = Rwi.transpose();
-            frame_i->tcw_ = Rwi.transpose()*twi*-1;
+        delete(tcw);
+        delete(qcw);
+    }
+
+    // xyz_point
+    for (auto& pir : all_ftr) {
+        int ftr_id   = pir.first;
+        Feature* ftr = pir.second;
+        if (ftr->pt3d_.z() < 0) {
+            continue;
         }
 
-        i++;
-        // cout << i << ": " << frame_i.tcw_.transpose() << endl;
+        if (!xyzs.count(ftr_id)) {
+            continue;
+        }
+
+        ftr->pt3d_ = Vector3d(xyzs[ftr_id]);
+
+        delete(xyzs[ftr_id]);
     }
+
+    Tcws.clear();
+    xyzs.clear();
 
     return 1;
 }
 
-Vector3d computeGyroBias(vector<FrameStruct*>& frames) {
-    Matrix3d A;
-    Vector3d b;
-
-    for (int i = 1; i < frames.size(); i++) {
-        // adjacent two frame
-        FrameStruct* frame_i = frames[i-1];
-        FrameStruct* frame_j = frames[i];
-
-        PreIntegrate* preinte = frames[i]->preintegrate_;
-        
-        // 
-        Quaterniond Qij_v(frame_i->Rcw_*frame_j->Rcw_.transpose());
-        Quaterniond Qij_i = preinte->delta_q_.cast<double>();
-
-        Matrix3d Jacobian = preinte->Jacobian_.block<3, 3>(J_OR, J_OBW).cast<double>();
-        Vector3d Error    = (Qij_v.inverse()*Qij_i).vec();
-
-        A.noalias() += Jacobian.transpose()*Jacobian;
-        b.noalias() += 2*Jacobian.transpose()*Error;
-    }
-
-    Vector3d delta_bg = A.ldlt().solve(-b);
-
-    // TODO: check it
-
-    return delta_bg;
-}
-
-int visualInertialAlign(vector<FrameStruct*>& frames) {    
-    Vector3d bias_g = computeGyroBias(frames);
-
-    cout << bias_g.transpose() << endl;
-
-    return 1;
-}

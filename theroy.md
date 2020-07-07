@@ -1,4 +1,4 @@
-# 理论相关
+# VINS-Mono-理论相关总结1
 
 &nbsp;
 
@@ -131,8 +131,8 @@ $$
 $$
 \begin{cases}
 p_{nt}=p_{n}+\frac{\partial{p}}{\partial{b}}\delta{b}=p_{n}+\frac{p+\delta{p}-p}{\delta{b}}\delta{b}=p_{n}+\frac{\delta{p}}{\delta{b}}\delta{b} \\
-v_{nt}=v_{n}+\frac{\part{v}}{\part{b}}\delta{b}=v_{n}+\frac{v+\delta{v}-v}{\delta{b}}\delta{b}=v_{n}+\frac{\delta{v}}{\delta{b}}\delta{b} \\
-q_{nt}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\part{\theta}}{\part{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\theta+\delta{\theta}-\theta}{\delta{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\delta{\theta}}{\delta{b}}\delta{b} \end{bmatrix}
+v_{nt}=v_{n}+\frac{\partial{v}}{\partial{b}}\delta{b}=v_{n}+\frac{v+\delta{v}-v}{\delta{b}}\delta{b}=v_{n}+\frac{\delta{v}}{\delta{b}}\delta{b} \\
+q_{nt}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\partial{\theta}}{\partial{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\partial{\theta}}{\partial{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\theta+\delta{\theta}-\theta}{\delta{b}}\delta{b} \end{bmatrix}=q_{n}\otimes\begin{bmatrix}1\\ \frac{1}{2}\frac{\delta{\theta}}{\delta{b}}\delta{b} \end{bmatrix}
 \end{cases}  \tag{6}
 $$
 
@@ -192,29 +192,28 @@ $$
   $$
 
 - $$
-  \begin{align}
+  \begin{aligned}
   [\Omega]_R&= \begin{bmatrix}0 & -\Omega^T \\ \Omega & -[\Omega]_{\times} \end{bmatrix} \\ 
   [\Omega]_L&= \begin{bmatrix}0 & -\Omega^T \\ \Omega & [\Omega]_{\times} \end{bmatrix}
-  \end{align}
+  \end{aligned}
   $$
 
 - $$
-  \begin{align}
+  \begin{aligned}
   \Omega  &=\frac{w^k_m+w^{k+1}_m}{2}-b^k_w \\
   \Omega_t&=\frac{w^k_m+n^k_w+w^{k+1}_m+n^{k+1}_{w}}{2}-b^k_w-\delta{b^k_w}=\Omega-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} \\
-  \end{align}
+  \end{aligned}
   $$
 
 至此，把上述的展开代入到公式9最后一行中中：
 $$
-\begin{align}
+\begin{aligned}
 \begin{bmatrix}0 \\ \dot{\delta{\theta}} \end{bmatrix}&=\begin{bmatrix}0 & -(\Omega_t-\Omega)^T \\ (\Omega_t-\Omega) & -([\Omega_t]_{\times}+[\Omega]_{\times}) \end{bmatrix} \begin{bmatrix}1 \\ \frac{1}{2}\delta{\theta}\end{bmatrix} \\
 &=\begin{bmatrix}0 & -(-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w})^T \\ 
 -\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} &  -(2[\Omega]-[\delta{b^k_w}_{\times}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w}]_{\times})\end{bmatrix}\begin{bmatrix}1 \\ \frac{1}{2}\delta{\theta}\end{bmatrix} \\
 &=\begin{bmatrix}... \\ -[\Omega]_{\times}\delta{\theta}-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w} \end{bmatrix} \\
 \dot{\delta{\theta}}&\rightarrow -[\Omega]_{\times}\delta{\theta}-\delta{b^k_w}+\frac{1}{2}n^{k}_{w}+\frac{1}{2}n^{k+1}_{w}
-
-\end{align}  \tag{10}
+\end{aligned}  \tag{10}
 $$
 所以离散化之后：
 $$
@@ -226,10 +225,10 @@ $$
 
 取公式8中的位移迭代公式，并使用truth-state=normal-state+error-state的方法进行推导，有：
 $$
-\begin{align}
+\begin{aligned}
 p_{k+1}^{t}&=p_{k+1}+\delta{p_{k+1}}=p^{t}_{k}+v_{k}^t+\frac{1}{2}\frac{R_k^t(a_k^t-b_{ak}^t)+R_{k+1}^t(a_{k+1}^t-b_{ak}^t)}{2}\Delta{t}^2 \\
 &=p_{k+1}+\delta{p_{k+1}}=p_{k}+\delta{p_k}+(v_{k}+\delta{v_k})\Delta{t}+\frac{1}{2}\frac{R_k^t(a_k^t-b_{ak}^t)+R_{k+1}^t(a_{k+1}^t-b_{ak}^t)}{2}\Delta{t}^2 
-\end{align}
+\end{aligned}
 $$
 把$p_{k+1}$的迭代公式代入之后有：
 $$
@@ -239,7 +238,7 @@ $$
 $$
 把后面的大括号中的部分设为E，单独拿出来化简，有：
 $$
-\begin{align}
+\begin{aligned}
 E&=R_kExp(\delta{\theta_k})(a_k-n^k_{a}-b_{ak}-\delta{b_{ak}})-R_k(a_k-b_{ak}) \\
 &+R_{k+1}Exp(\delta{\theta_{k+1}})(a_{k+1}-n^{k+1}_{a}-b_{ak+1}-\delta{b_{ak+1}})-R_k(a_{k+1}-b_{ak+1}) \\
 \\
@@ -266,8 +265,7 @@ E&=R_kExp(\delta{\theta_k})(a_k-n^k_{a}-b_{ak}-\delta{b_{ak}})-R_k(a_k-b_{ak}) \
 &+\underbrace{(-R_{k}+R_{k+1})\delta{b_{ak}}}_{b_{ak}}+\underbrace{(R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\Delta{t})\delta{b_{wk}}}_{b_{wk}}\\
 &+\underbrace{(-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\frac{1}{2}\Delta{t})n_{w}^k}_{n_{w}^k}+\underbrace{(-R_{k+1}[a_{k+1}-b_{ak+1}]_{\times}\frac{1}{2}\Delta{t})n_{w}^{k+1}}_{n_{w}^{k+1}} \\
 &+\underbrace{(-R_{k})n_{a}^k}_{n_{a}^k}+\underbrace{(-R_{k+1})n_{a}^{k+1}}_{n_{a}^{k+1}}
-
-\end{align} \tag{13}
+\end{aligned} \tag{13}
 $$
 把公式13的结论代入到公式12中，就可以得到关于位移的error-state的离散形势下的状态转移方程了。
 
@@ -400,6 +398,110 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
     }
 }
 ```
+
+---
+
+#### Visual Inertial Alignment
+
+经过了上一步骤之后，算法开始进行整个的视觉位姿和惯导位姿的对齐工作，算法在这个过程中主要求解的变量为每个预积分时间间隔的速度、整个视觉的尺度以及**在视觉初始帧上的重力加速度**（这个地方也是笔者认为VINS-Mono工作很细致且合理的地方，因为整个过程中算法并没有依靠任何的先验信息），求解的状态变量如下：
+$$
+\mathcal{X}_{I}=\left[\mathbf{v}_{b_{0}}^{b_{0}}, \mathbf{v}_{b_{1}}^{b_{1}}, \cdots \mathbf{v}_{b_{n}}^{b_{n}}, \mathbf{g}^{c_{0}}, s\right]
+$$
+
+还是先看算法的输入：
+
+- 相机参考系$C_0$下的每个时刻的位姿$T^{c0}_{c_k}=[R^{c0}_{c_k}|p^{c0}_{c_k}],k=0,...,N$；
+- IMU坐标系$b$下的每个时间间隔的积分值${p_{bk+1}^{bk}, v_{bk+1}^{bk},k=0,...,N-1}$；
+
+于是可以在相机的参考系$C_0$构建如下的模型：
+$$
+\begin{aligned}
+\begin{cases}
+s{^{c0}}p_{bk+1} &= s^{c0}p_{bk}+{^{c0}}v_{bk}\Delta{t}-\frac{1}{2}{^{c0}}g\Delta{t}^2+{^{c0}}p_{bk+1}^{bk} \\
+{^{c0}}v_{bk+1} &= {^{c0}}v_{bk}-{^{c0}}g\Delta{t}+{^{c0}}v_{bk+1}^{bk}
+\end{cases}
+\end{aligned} \tag{18}
+$$
+在上述公式中，笔者特别把参考系写在了符号的左上角，例如$^{c0}p_{bk}$表示在$C_0$坐标系下，IMU在K时刻的位置；但是我们仅仅有K时刻Camera的位置，这个也很简单，基本上就是一个简单的三角转换关系，图形表示的话如下：
+
+<img src="pictures/VIO3.png"/>
+
+其中：
+
+- $a={^{c0}}p_{ck}$，$b={^{c0}}p^{ck}_{bk}$，$c={^{c0}}p_{bk}$；
+
+- 那么c是需要求解的量，a是视觉得到的量，那么剩下的关键就是b如何得到了，其实也比较简单，因为通常情况下我们知道了IMU与Camera之间的外参$T_{c}^{b}=[R_{c}^{b}|t_{c}^{b}]=[R_{ck}^{bk}|t_{ck}^{bk}]$，那可以看到，外参对应的参考系是K时刻的IMU系，即$b_k$，那转到$C_0$坐标系下也简单，直接转一下就OK了，于是有：
+  $$
+  \begin{aligned}
+  s{^{c0}}p_{bk}&=s{^{c0}}p_{ck}+(-\underbrace{R^{c0}_{bk}p_{ck}^{bk}}_{{^{c0}}p_{ck}^{bk}}) \\
+  &=s{^{c0}}p_{ck}-\underbrace{R^{c0}_{ck}(R_c^b)^T}_{R_{bk}^{c0}} p_{c}^{b} 
+  \end{aligned} \tag{19}
+  $$
+
+所以公式（18）可以进一步写作：
+$$
+\begin{aligned}
+\begin{cases}
+p_{bk+1}^{bk} &= R_{c0}^{bk} \left[s({^{c0}}p_{bk+1}-{^{c0}}p_{bk})-R_{bk}^{c0}v_{bk}\Delta{t}+\frac{1}{2}{^{c0}}g\Delta{t}^2\right] \\
+&= R_{c0}^{bk} \left[s{^{c0}}p_{ck+1}-R_{bk+1}^{c0}p_{c}^{b}-s{^{c0}}p_{bk}+R_{bk}^{c0}p_{c}^{b}-R_{bk}^{c0}v_{bk}\Delta{t}+\frac{1}{2}{^{c0}}g\Delta{t}^2\right]\\
+&= R_{c0}^{bk} \left[s({^{c0}}p_{ck+1}-{^{c0}}p_{bk})-R_{bk}^{c0}v_{bk}\Delta{t}+\frac{1}{2}{^{c0}}g\Delta{t}^2\right]-R_{bk+1}^{bk}p_{c}^{b}+p_{c}^{b}\\
+v_{bk+1}^{bk} &= R_{c0}^{bk}({^{c0}}v_{bk+1} - {^{c0}}v_{bk}+{^{c0}}g\Delta{t}) \\
+&= R_{c0}^{bk}(R_{bk+1}^{c0}v_{bk+1} - R_{bk}^{c0}v_{bk}+{^{c0}}g\Delta{t}) \\
+\end{cases}
+\end{aligned} \tag{20}
+$$
+公式（20）可以理解为一个观测方程，由状态变量$\left[ v_{bk} , v_{bk+1}, {^{c0}}g, s \right]$得到K～K+1时刻IMU积分的值，所以写作矩阵的形式就是：
+$$
+\hat{\mathbf{z}}_{b_{k+1}}^{b_{k}}=\left[\begin{array}{c}
+\hat{\boldsymbol{\alpha}}_{b_{k+1}}^{b_{k}}-\mathbf{p}_{c}^{b}+\mathbf{R}_{c_{0}}^{b_{k}} \mathbf{R}_{b_{k+1}}^{c_{0}} \mathbf{p}_{c}^{b} \\
+\hat{\boldsymbol{\beta}}_{b_{k+1}}^{b_{k}}
+\end{array}\right]=\mathbf{H}_{b_{k+1}}^{b_{k}} \mathcal{X}_{I}+\mathbf{n}_{b_{k+1}}^{b_{k}} \tag{21}
+$$
+其中：
+$$
+\mathbf{H}_{b_{k+1}}^{b_{k}}=\left[\begin{array}{cccc}
+-\mathbf{I} \Delta t_{k} & \mathbf{0} & \frac{1}{2} \mathbf{R}_{c_{0}}^{b_{k}} \Delta t_{k}^{2} & \mathbf{R}_{c_{0}}^{b_{k}}\left(\overline{\mathbf{p}}_{c_{k+1}}^{c_{0}}-\overline{\mathbf{p}}_{c_{k}}^{c_{0}}\right) \\
+-\mathbf{I} & \mathbf{R}_{c_{0}}^{b_{k}} \mathbf{R}_{b_{k+1}}^{c_{0}} & \mathbf{R}_{c_{0}}^{b_{k}} \Delta t_{k} & \mathbf{0}
+\end{array}\right]
+$$
+那么对于公式（21）的解法就比较多了，可以直接用线性方程的解，也可以用迭代的方式求解，这里就不赘述了。
+
+需要特别注意的一点，在VINS-Mono的实现中，作者在尺度部分引入了一个100倍的系数，个人理解这里并不是权重，应该是怕最终解算出来的的尺度很小，因此想把这个数值变得大一些，防止因为数值问题而导致结果错误。
+
+&nbsp;
+
+---
+
+#### Refine Gravity
+
+算法在获取了初始 的重力加速度之后，又对重力加速度进行了细调，期望找到一个更准的重力加速度，这部分和上部分的理论基本一致，不过对于重力变量的优化，作者采用的是球面坐标的表示方法，论文中给出的图示如下：
+
+<img src="pictures/VIO5.png">
+
+其中：
+
+- $|g|$表示标准的重力加速度的模长，$\overrightarrow{g}$表示本次优化的初始重力方向的方向向量；
+- $b_1, b_2$表示在Tangent平面上的两个正交向量，当做是优化空间的基底；
+
+那么重写公式（18）有：
+$$
+\begin{aligned}
+\begin{cases}
+s{^{c0}}p_{bk+1} &= s^{c0}p_{bk}+{^{c0}}v_{bk}\Delta{t}-\frac{1}{2}({^{c0}}g_0+[b1, b2]\begin{bmatrix}w1 \\ w2\end{bmatrix})\Delta{t}^2+{^{c0}}p_{bk+1}^{bk} \\
+{^{c0}}v_{bk+1} &= {^{c0}}v_{bk}-({^{c0}}g_0+[b1, b2]\begin{bmatrix}w1 \\ w2\end{bmatrix})\Delta{t}+{^{c0}}v_{bk+1}^{bk}
+\end{cases}
+\end{aligned} \tag{22}
+$$
+于是公式（20）变作：
+$$
+\begin{aligned}
+\begin{cases}
+p_{bk+1}^{bk} &= R_{c0}^{bk} \left[s({^{c0}}p_{ck+1}-{^{c0}}p_{bk})-R_{bk}^{c0}v_{bk}\Delta{t}+[b1, b2]\begin{bmatrix}w1 \\ w2\end{bmatrix}\right]-R_{bk+1}^{bk}p_{c}^{b}+p_{c}^{b}+\frac{1}{2}R_{c0}^{bk}{^{c0}}g_0\Delta{t}^2\\
+v_{bk+1}^{bk} &= R_{c0}^{bk}(R_{bk+1}^{c0}v_{bk+1}-R_{bk}^{c0}v_{bk}+([b1, b2]\begin{bmatrix}w1 \\ w2\end{bmatrix})\Delta{t})+R_{c0}^{bk}{^{c0}}g_0\Delta{t}
+\end{cases}
+\end{aligned} \tag{23}
+$$
+这部分也可以写作线性方程的形式，这里就不赘述了。
 
 
 

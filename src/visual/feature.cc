@@ -10,7 +10,6 @@ FeatureManager::~FeatureManager() {
     ;
 }
 
-
 bool FeatureManager::clear() {
     for (auto& pir : all_ftr_) {
         if (pir.second != nullptr) {
@@ -19,6 +18,39 @@ bool FeatureManager::clear() {
     }
 
     all_ftr_.clear();
+}
+
+bool FeatureManager::removeFrame(int frame_id) {
+    for (auto &id_ftr : all_ftr_) {
+        int       id = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (!ftr->contains(frame_id)) {
+            continue;
+        }
+
+        ftr->removeFrame(frame_id);
+    }
+    return true;
+}
+
+bool FeatureManager::removeOldestFrame(const Quaternionf &Rc1c0, const Vector3f &tc1c0) { 
+    for (auto &id_ftr : all_ftr_) {
+        int       id = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (!ftr->ref_frame_id_ != 0) {
+            continue;
+        }
+
+        Vector3f Pc0 = ftr->vis_fs_[0]*ftr->inv_d_;
+        Vector3f Pc1 = Rc1c0*Pc0 + tc1c0;
+
+        ftr->inv_d_ = 1.0f/Pc1.norm();
+
+        ftr->removeFrame(0);
+    }
+    return true;
 }
 
 bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) {
@@ -80,8 +112,6 @@ bool FeatureManager::addNewFeatures(const Image_Type& image_data, int frame_id) 
         LOGI("[FM add ftr] parallax : %f", parallax_sum);
         return parallax_sum >= 10;
     }
-
-    return true;
 }
 
 float FeatureManager::computeParallax(Feature* ftr, int frame_id) {
@@ -95,3 +125,48 @@ float FeatureManager::computeParallax(Feature* ftr, int frame_id) {
     return max(0.0f, sqrtf(dx*dx + dy*dy));
 }
 
+
+bool FeatureManager::trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]) {
+    int i = 0;
+    for (auto &id_ptr : all_ftr_) {
+        int id       = id_ptr.first;
+        Feature* ftr = id_ptr.second;
+
+        if (ftr->size() < 2) {
+            continue;
+        }
+
+        const int N = ftr->size();
+        MatrixXf A(2*N, 4); A.setZero();
+
+        int j = 0, rows = 0;
+        int start_j = ftr->ref_frame_id_;
+
+        Matrix3f Rrw = Rcw[start_j];
+        Vector3f trw = tcw[start_j];
+
+        for (Vector3f f : ftr->vis_fs_) {
+            Matrix<float, 3, 4> Tcr;
+            Tcr.block<3, 3>(0, 0) = Rcw[start_j+j]*Rrw.transpose();
+            Tcr.block<3, 1>(0, 3) = tcw[start_j+j] - Tcr.block<3, 3>(0, 0)*trw;
+
+            f.normalize();
+            A.row(rows++) = f(0)*Tcr.row(2) - f(2)*Tcr.row(0);
+            A.row(rows++) = f(1)*Tcr.row(2) - f(2)*Tcr.row(1);
+
+            j++;
+        }
+
+        assert(rows == 2*N);
+
+        Eigen::Vector4f svd_V = Eigen::JacobiSVD<Eigen::MatrixXf>(A, Eigen::ComputeThinV).matrixV().rightCols<1>();
+        float depth = svd_V[2] / svd_V[3];
+
+        if (depth < 0.1) {
+            depth = INIT_DEPTH;
+        }
+        
+        ftr->inv_d_ = 1.0f/depth;
+    }
+    return true;
+}

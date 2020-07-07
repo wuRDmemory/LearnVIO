@@ -18,7 +18,7 @@ using namespace cv;
 using namespace Eigen;
 
 class Estimator {
-private:
+public:
     
     bool first_imu_;
     bool initial_;
@@ -33,7 +33,7 @@ private:
 
     vector<PreIntegrate*> preintegrates_;
 
-    vector<Quaternionf> RS_;
+    vector<Quaternionf> RS_;   // world is real world, RS[i] mean w_R_bk
     vector<Vector3f> VS_;
     vector<Vector3f> PS_;
     vector<Vector3f> BAS_;
@@ -57,6 +57,19 @@ public:
     void clearState();
 
 private:
+    bool solveOdometry();
+
     bool structInitial();
 
+    bool slideWindow(bool margin_old);
+
+    bool slideOldFrame();
+
+    bool slideNewFrame();
+
+    bool solveNewFrame(map<int, Feature*> &all_features, Matrix3f Rcw, Vector3f tcw);
+
+    void vector2double();
+
+    void double2vector();
 };

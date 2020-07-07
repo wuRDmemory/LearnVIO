@@ -43,6 +43,8 @@ static mutex estimate_lock;
 static queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 static queue<sensor_msgs::ImuConstPtr>        imu_buf;
 
+static ros::Publisher pose_publisher;
+
 template <typename T> 
 T getParameter(ros::NodeHandle& n, string name) {
     T ans;
@@ -94,6 +96,7 @@ void imuCallBack(const sensor_msgs::ImuConstPtr &imu_msg) {
         //     pubLatestOdometry(tmp_P, tmp_Q, tmp_V, header);
     }
 }
+
 
 vector<Data_Type> getMeasures() {    
     vector<Data_Type> ret;
@@ -156,7 +159,7 @@ void process() {
         // already handle the imu buffer
         lock.unlock();
 
-        {
+        {   // 
         unique_lock<mutex> lock1(estimate_lock);
         for (Data_Type& measure : measures) {
             auto feature = measure.second;
@@ -231,6 +234,8 @@ void process() {
             ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
         }
         }
+
+
     }
 }
 

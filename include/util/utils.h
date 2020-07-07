@@ -43,4 +43,77 @@ Quaternion<T> vec2quat(const Matrix<T, 3, 1>& vec) {
     return ret;
 }
 
+template<typename T> 
+Matrix<T, 3, 1> Rnb2ypr(Matrix<T, 3, 3> R) {
+    Matrix<T, 3, 1> n = R.col(0);
+    Matrix<T, 3, 1> o = R.col(1);
+    Matrix<T, 3, 1> a = R.col(2);
 
+    Matrix<T, 3, 1> ypr;
+    double y = atan2(n(1), n(0));
+    double p = atan2(-n(2), n(0) * cos(y) + n(1) * sin(y));
+    double r = atan2(a(0) * sin(y) - a(1) * cos(y), -o(0) * sin(y) + o(1) * cos(y));
+    ypr(0) = y;
+    ypr(1) = p;
+    ypr(2) = r;
+
+    return ypr / M_PI * 180.0;
+}
+
+template<typename T>
+Matrix<T, 3, 3> ypr2Rnb(Matrix<T, 3, 1> ypr) {
+
+    T y = ypr(0) / 180.0 * M_PI;
+    T p = ypr(1) / 180.0 * M_PI;
+    T r = ypr(2) / 180.0 * M_PI;
+
+    Eigen::Matrix<T, 3, 3> Rz;
+    Rz << cos(y), -sin(y), 0,
+        sin(y), cos(y), 0,
+        0, 0, 1;
+
+    Eigen::Matrix<T, 3, 3> Ry;
+    Ry << cos(p), 0., sin(p),
+          0., 1., 0.,
+          -sin(p), 0., cos(p);
+
+    Eigen::Matrix<T, 3, 3> Rx;
+    Rx << 1., 0., 0.,
+        0., cos(r), -sin(r),
+        0., sin(r), cos(r);
+
+    return Rz * Ry * Rx;
+}
+
+template<typename T>
+Matrix<T, 3, 3> gravity2Rnb(Matrix<T, 3, 1> g) {
+    Matrix<T, 3, 3> R0;
+    Matrix<T, 3, 1> ng1 = g.normalized();
+    Matrix<T, 3, 1> ng2{0, 0, 1.0};
+    R0 = Quaternion<T>::FromTwoVectors(ng1, ng2).toRotationMatrix();  // w'_R_c0
+
+    T yaw = Rnb2ypr(R0).x();
+    R0 = ypr2Rnb(Matrix<T, 3, 1>{-yaw, 0, 0})*R0;  // w_R_c0 = w_R_w' * w'_R_c0
+    
+    return R0;
+}
+
+template<typename T> 
+void cvtPoseFromBodyToCamera(const Matrix<T, 3, 3> &Rwb, const Matrix<T, 3, 1> &twb, 
+                                 const Matrix<T, 3, 3> &Rbc, const Matrix<T, 3, 1> &tbc, 
+                                 Matrix<T, 3, 3> &Rwc, Matrix<T, 3, 1> &twc) {
+    // w_R_c = w_R_b * b_R_c
+    Rwc = Rwb*Rbc;
+    // w_P_c = w_P_b + w_R_b * b_P_c
+    twc = twb + Rwb*tbc;
+}
+
+template<typename T> 
+void cvtPoseFromCameraToBody(const Matrix<T, 3, 3> &Rwc, const Matrix<T, 3, 1> &twc, 
+                                 const Matrix<T, 3, 3> &Rbc, const Matrix<T, 3, 1> &tbc, 
+                                 Matrix<T, 3, 3> &Rwb, Matrix<T, 3, 1> &twb) {
+    // w_R_b = w_R_c * c_R_b
+    Rwb = Rwc*Rbc.transpose();
+    // w_P_b = w_P_c - w_R_b * b_P_c
+    twb = twc - Rwb*tbc;
+}

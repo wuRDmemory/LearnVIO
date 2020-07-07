@@ -115,6 +115,9 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
     trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
 #endif
 
+   // add new when published current tracked features
+   tracker.addPoints();
+   
    if (PUB_THIS_FRAME)
    {
         pub_count++;
@@ -170,8 +173,6 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg) {
             pub_img.publish(feature_points);
         }
 
-        // add new when published current tracked features
-        tracker.addPoints();
 
         if (SHOW_TRACK) {
             cv::Mat show_image;

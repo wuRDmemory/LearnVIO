@@ -1,5 +1,4 @@
 #include "../../include/util/config.h"
-#include "opencv2/opencv.hpp"
 #include "../../include/util/log.h"
 
 string CONFIG_PATH;
@@ -12,26 +11,28 @@ int MAX_CNT;
 int MIN_DIST;
 int WINDOW_SIZE;
 int FREQ;
-double F_THRESHOLD;
 int SHOW_TRACK;
 int STEREO_TRACK;
 int EQUALIZE;
 int ROW;
 int COL;
 int FOCAL_LENGTH;
+int FEN_WINDOW_SIZE;
 int FISHEYE;
 bool PUB_THIS_FRAME;
 
 float ACCL_N, GYRO_N;
 float ACCL_BIAS_N, GYRO_BIAS_N;
+float INIT_DEPTH;
 
-int FEN_WINDOW_SIZE;
+double F_THRESHOLD;
+
+vector<Matrix3d> Rics;
+vector<Vector3d> tics;
 
 bool readParameters(string config_path, string vins_path) {
     string config_file_path;
     string vins_folder_path;
-    // config_file_path = getParameter<string>(n, "config_file");
-    // vins_folder_path = getParameter<string>(n, "vins_folder");
 
     config_file_path = config_path;
     vins_folder_path = vins_path;
@@ -46,7 +47,6 @@ bool readParameters(string config_path, string vins_path) {
         LOGE("CAN OPEN CONFIG FILE!!!");
         return false;
     }
-
 
     fs["image_topic"] >> IMAGE_TOPIC;
     fs["imu_topic"]   >> IMU_TOPIC;
@@ -65,21 +65,40 @@ bool readParameters(string config_path, string vins_path) {
     ACCL_BIAS_N = fs["accl_bias_noise"];
     GYRO_BIAS_N = fs["gyro_bias_noise"];
 
+    {   // read extrinsic parameter
+        cv::Mat cv_R, cv_T;
+
+        fs["extrinsicRotation"]    >> cv_R;
+        fs["extrinsicTranslation"] >> cv_T;
+
+        Eigen::Matrix3d eigen_R;
+        Eigen::Vector3d eigen_T;
+        cv::cv2eigen(cv_R, eigen_R);
+        cv::cv2eigen(cv_T, eigen_T);
+
+        Eigen::Quaterniond Q(eigen_R);
+        eigen_R = Q.normalized();
+        Rics.push_back(eigen_R);
+        tics.push_back(eigen_T);
+
+        cout << "Extrinsic Ric: " << endl << "\t" << Rics[0] << endl;
+        cout << "Extrinsic tic: " << endl << "\t" << tics[0].transpose() << endl;
+    }
 
     if (FISHEYE == 1)
         FISHEYE_MASK = vins_folder_path + "/config/fisheye_mask.jpg";
 
     CAM_NAMES.push_back(config_file_path);
 
-    WINDOW_SIZE    = 20;
-    STEREO_TRACK   = false;
-    FOCAL_LENGTH   = 460;
-    PUB_THIS_FRAME = false;
+    WINDOW_SIZE     = 20;
+    STEREO_TRACK    = false;
+    FOCAL_LENGTH    = 460;
+    PUB_THIS_FRAME  = false;
+    FEN_WINDOW_SIZE = 10;
+    INIT_DEPTH      = 1;
 
     if (FREQ == 0)
         FREQ = 100;
-
-    FEN_WINDOW_SIZE = 10;
 
     fs.release();
 
