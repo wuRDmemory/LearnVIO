@@ -58,19 +58,19 @@ public:
     Vector3f    result_gyro_bias_;
 
     // jaconbian
-    Matrix<float, J_NUMS, J_NUMS>   Jacobian_;
+    Matrix<double, J_NUMS, J_NUMS>   Jacobian_;
 
     // covariance
-    Matrix<float, J_NUMS, J_NUMS>   covariance_;
+    Matrix<double, J_NUMS, J_NUMS>   covariance_;
 
     // noise
-    Matrix<float, J_NOISE, J_NOISE>  noise_;
+    Matrix<double, J_NOISE, J_NOISE>  noise_;
     
 
 public:
 
     PreIntegrate() {}
-    PreIntegrate(const Vector3f& accl0,       const Vector3f& gyro0, 
+    PreIntegrate(const Vector3f& accl0,      const Vector3f& gyro0, 
                  const Vector3f& bias_accl,  const Vector3f& bias_gyro):
                  accl_0_(accl0),        gyro_0_(gyro0), 
                  accl_bias_(bias_accl), gyro_bias_(bias_gyro), 
@@ -94,7 +94,7 @@ public:
         accl_buf_.push_back(accl0);
         gyro_buf_.push_back(gyro0);
 
-        Matrix3f I   = Matrix3f::Identity();
+        Matrix3d I   = Matrix3d::Identity();
 
         noise_.setZero();
         noise_.block<3, 3>(V_ONA0, V_ONA0) = (ACCL_N*ACCL_N)*I;
@@ -219,11 +219,14 @@ public:
             V.block<3, 3>(J_OV, V_ONA1) = 0.5*R_1*dt;
             V.block<3, 3>(J_OV, V_ONW1) = 0.5*R_1_A_1_x*dt*0.5*dt;
 
+            MatrixXd dF = F.cast<double>();
+            MatrixXd dV = V.cast<double>();
+
             // update jacobian
-            Jacobian_   = F*Jacobian_;
+            Jacobian_   = dF*Jacobian_;
             
             // update covariance
-            covariance_ = F*covariance_*F.transpose() + V*noise_*V.transpose();
+            covariance_ = dF*covariance_*dF.transpose() + dV*noise_*dV.transpose();
         }
 
         Vector3f mid_accl = (accl_k0+accl_k1)/2;
@@ -237,9 +240,32 @@ public:
     }
 
     Matrix<double, 15, 1> 
-    evaluate(const Matrix3d& Rwi, const Vector3d& twi, const Vector3d& vwi, const Vector3d& bai, const Vector3d& bgi, 
-             const Matrix3d& Rwj, const Vector3d& twj, const Vector3d& vwj, const Vector3d& baj, const Vector3d& bgj) {
+    evaluate(const Quaterniond& Rwi, const Vector3d& pwi, const Vector3d& vwi, const Vector3d& bai, const Vector3d& bgi, 
+             const Quaterniond& Rwj, const Vector3d& pwj, const Vector3d& vwj, const Vector3d& baj, const Vector3d& bgj) {
+                 
+        const double dt = sum_dt_;
+        Vector3d G = Gw.cast<double>();
+        Matrix<double, 15, 1> residual;
         
+        Matrix3d J_p_ba = Jacobian_.block<3, 3>(J_OP, J_OBA).cast<double>();
+        Matrix3d J_p_bg = Jacobian_.block<3, 3>(J_OP, J_OBW).cast<double>();
+        Matrix3d J_v_ba = Jacobian_.block<3, 3>(J_OV, J_OBA).cast<double>();
+        Matrix3d J_v_bg = Jacobian_.block<3, 3>(J_OV, J_OBW).cast<double>();
+        Matrix3d J_q_bg = Jacobian_.block<3, 3>(J_OR, J_OBW).cast<double>();
+
+        Vector3d dba = bai - accl_bias_.cast<double>();
+        Vector3d dbg = bgi - gyro_bias_.cast<double>();
+
+        Vector3d correct_dp    = delta_p_ + J_p_ba*dba + J_p_bg*dbg;
+        Vector3d correct_dv    = delta_v_ + J_v_ba*dba + J_v_bg*dbg;
+        Quaterniond correct_dq = delta_q_.cast<double>()*vec2quat<double>(dbg);
+
+        residual.segment<3>(J_OP) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt);
+        residual.segment<3>(J_OR) = 2*(correct_dq.inverse()*Rwi.inverse()*Rwj).vec();
+        residual.segment<3>(J_OV) = Rwi.inverse()*(vwj - vwi + G*dt);
+        residual.segment<3>(J_OBA) = baj - bai;
+        residual.segment<3>(J_OBW) = bgj - bgi;
         
+        return residual;
     }
 };

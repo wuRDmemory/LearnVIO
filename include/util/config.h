@@ -12,6 +12,10 @@ using namespace std;
 using namespace cv;
 using namespace Eigen;
 
+const int FEN_WINDOW_SIZE = 10;
+const int POSE_SIZE       = 7;
+const int MOTION_SIZE     = 9;
+
 extern string CONFIG_PATH;
 extern string IMAGE_TOPIC;
 extern string IMU_TOPIC;
@@ -35,8 +39,7 @@ extern float ACCL_N, GYRO_N;
 extern float ACCL_BIAS_N, GYRO_BIAS_N;
 extern float INIT_DEPTH;
 
-extern int FEN_WINDOW_SIZE;
-
+extern Vector3f         Gw;
 extern vector<Matrix3d> Rics;
 extern vector<Vector3d> tics;
 

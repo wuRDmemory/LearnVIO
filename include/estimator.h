@@ -12,6 +12,7 @@
 #include "../include/inertial/preintegrate.h"
 #include "../include/initial/initial.h"
 #include "../include/visual/globalsfm.h"
+#include "../include/util/config.h"
 
 using namespace std;
 using namespace cv;
@@ -33,18 +34,21 @@ public:
 
     vector<PreIntegrate*> preintegrates_;
 
+    vector<double>      timestamp_;
     vector<Quaternionf> RS_;   // world is real world, RS[i] mean w_R_bk
-    vector<Vector3f> VS_;
-    vector<Vector3f> PS_;
-    vector<Vector3f> BAS_;
-    vector<Vector3f> BGS_;
+    vector<Vector3f>    VS_;
+    vector<Vector3f>    PS_;
+    vector<Vector3f>    BAS_;
+    vector<Vector3f>    BGS_;
 
     map<double, FrameStruct> all_frames_;
+    Vector3f accl_0_;
+    Vector3f gyro_0_;
 
-    vector<double> timestamp_;
-
-    Vector3f g_;
-    Vector3f accl_0_, gyro_0_;
+    // optimize variables
+    double pose_params[FEN_WINDOW_SIZE+1][POSE_SIZE]; 
+    double motion_params[FEN_WINDOW_SIZE+1][MOTION_SIZE];
+    double point_params[1000];
 
 public:
     Estimator();
@@ -72,4 +76,6 @@ private:
     void vector2double();
 
     void double2vector();
+
+    void solveOptimize();
 };

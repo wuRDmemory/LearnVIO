@@ -4,6 +4,8 @@
 #include "../include/util/config.h"
 #include "../include/initial/initial.h"
 #include "../include/visual/globalsfm.h"
+#include "../include/visual/project_factor.h"
+#include "../include/inertial/inertial_factor.h"
 
 Estimator::Estimator() {
     temp_preintegrate_= nullptr;
@@ -56,7 +58,6 @@ void Estimator::clearState() {
 void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
     
     // LOGD("[estimate] FEN_WINDOW_SIZE: %d, frame id %d", FEN_WINDOW_SIZE, frame_count_); 
-    // 
     if (preintegrates_[frame_count_] == NULL) {
         preintegrates_[frame_count_] = new PreIntegrate(accl_0_, gyro_0_, BAS_[frame_count_], BGS_[frame_count_]);
     } 
@@ -77,7 +78,7 @@ void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
         RS_[frame_count_] *= vec2quat<float>(gyro_mid);
         accl_b1  = RS_[frame_count_]*(accl   -BAS_[frame_count_]);
 
-        accl_mid = (accl_b0 + accl_b1)/2 - g_;
+        accl_mid = (accl_b0 + accl_b1)/2 - Gw;
         PS_[frame_count_] += VS_[frame_count_]*dt + 0.5*accl_mid*dt*dt;
         VS_[frame_count_] += accl_mid*dt;
     }
@@ -138,34 +139,28 @@ bool Estimator::solveOdometry() {
         return false;
     }
 
-    if (initial_) {
-        // BA
-        double pose_params[FEN_WINDOW_SIZE+1][7];
-        double velo_params[FEN_WINDOW_SIZE+1][9];
-        double point_params[1000];
-
-        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
-            pose_params[i][0] = PS_[i].x();            
-            pose_params[i][1] = PS_[i].y();            
-            pose_params[i][2] = PS_[i].z();            
-            pose_params[i][3] = RS_[i].x();
-            pose_params[i][4] = RS_[i].y();
-            pose_params[i][5] = RS_[i].z();
-            pose_params[i][6] = RS_[i].w();
-
-            velo_params[i][0] = VS_[i].x();
-            velo_params[i][1] = VS_[i].y();
-            velo_params[i][2] = VS_[i].z();
-            velo_params[i][3] = BAS_[i].x();
-            velo_params[i][4] = BAS_[i].y();
-            velo_params[i][5] = BAS_[i].z();
-            velo_params[i][6] = BGS_[i].x();
-            velo_params[i][7] = BGS_[i].y();
-            velo_params[i][8] = BGS_[i].z();
-        }
-
-        
+    if (!initial_) {
+        return false;
     }
+
+    Matrix3f Rwc;
+    Vector3f twc;
+    Matrix3f Rbc = Rics[0].cast<float>();
+    Vector3f tbc = tics[0].cast<float>();
+    Matrix3f Rcw[FEN_WINDOW_SIZE+1];
+    Vector3f tcw[FEN_WINDOW_SIZE+1];
+    for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        Rwc = RS_[i].toRotationMatrix()*Rbc; // w_R_c = w_R_b*b_R_c
+        twc = PS_[i] + RS_[i]*tbc;           // w_t_c = w_t_bk + w_R_bk*bk_t_ck
+
+        Rcw[i] = Rwc.transpose();
+        tcw[i] = Rwc.transpose()*twc*-1;
+    }
+
+    int new_ftr_cnt = feature_manager_.trianglesNew(Rcw, tcw);
+    LOGD(">>> [new ftr] %d", new_ftr_cnt);
+
+    solveOptimize();
 
     return true;
 }
@@ -334,7 +329,7 @@ bool Estimator::structInitial() {
     Matrix3f Rww1  = ypr2Rnb<float>(Vector3f{-yaw, 0, 0});
 
     Matrix3f Rwc0 = Rww1*Rw1c0;
-    g_ = Rwc0*g_c0.cast<float>();
+    Gw = Rwc0*g_c0.cast<float>();
 
     // change world frame from c0 to world
     for (int i = 0; i < N; i++) {
@@ -451,4 +446,75 @@ bool Estimator::slideOldFrame() {
 bool Estimator::slideNewFrame() {
     feature_manager_.removeFrame(FEN_WINDOW_SIZE-1);
     return true;
+}
+
+void Estimator::vector2double() {
+    // BA
+    int  i = 0;
+    for (i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        pose_params[i][0] = PS_[i].x();            
+        pose_params[i][1] = PS_[i].y();            
+        pose_params[i][2] = PS_[i].z();            
+        pose_params[i][3] = RS_[i].x();
+        pose_params[i][4] = RS_[i].y();
+        pose_params[i][5] = RS_[i].z();
+        pose_params[i][6] = RS_[i].w();
+
+        motion_params[i][0] = VS_[i].x();
+        motion_params[i][1] = VS_[i].y();
+        motion_params[i][2] = VS_[i].z();
+        motion_params[i][3] = BAS_[i].x();
+        motion_params[i][4] = BAS_[i].y();
+        motion_params[i][5] = BAS_[i].z();
+        motion_params[i][6] = BGS_[i].x();
+        motion_params[i][7] = BGS_[i].y();
+        motion_params[i][8] = BGS_[i].z();
+    }
+
+    // feature point
+    i = 0;
+    auto &all_ftr = feature_manager_.all_ftr_;
+    for (auto &id_ftr : all_ftr) {
+        int id       = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (   ftr->size() <= 2 
+            || ftr->ref_frame_id_ >= FEN_WINDOW_SIZE-2
+            || ftr->inv_d_ <= 0) {
+            continue;
+        }
+
+        point_params[i] = ftr->inv_d_;
+        i++;
+    }
+}
+
+void Estimator::solveOptimize() {
+    // get all optimate variables
+    vector2double();
+
+    // ceres problem
+    ceres::Problem problem;
+
+    // add pose and motion
+    for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        ceres::LocalParameterization* pose_local = new PoseLocalParameter(); 
+        problem.AddParameterBlock(pose_params[i], POSE_SIZE, pose_local);
+        problem.AddParameterBlock(motion_params[i], MOTION_SIZE);
+    }
+
+    // add imu constraint
+    for (int i = 1; i <= FEN_WINDOW_SIZE; i++) {
+        Inertial_Factor* iner_factor = new Inertial_Factor(preintegrates_[i]);
+        problem.AddResidualBlock(iner_factor, NULL, vector<double*>{
+            pose_params[i-1], motion_params[i-1],
+            pose_params[i-0], motion_params[i-0],
+        });
+    }
+
+    // add feature constraint
+
+
+    // optimize
+
 }

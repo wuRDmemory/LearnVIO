@@ -12,6 +12,7 @@ using namespace std;
 using namespace cv;
 using namespace Eigen;
 
+
 template<typename T>
 Matrix<T, 3, 3> symmetricMatrix(const Matrix<T, 3, 1>& vec) {
     Matrix<T, 3, 3> ret;
@@ -24,6 +25,30 @@ Matrix<T, 3, 3> symmetricMatrix(const Matrix<T, 3, 1>& vec) {
             z,  0, -x, \
            -y,  x,  0;
 
+    return ret;
+}
+
+template<typename T>
+Matrix<T, 4, 4> quatLeftMult(const Quaternion<T> &q) {
+    Matrix<T, 4, 4> ret;
+
+    ret << q.w(), -q.x(), -q.y(), -q.z(), \
+           q.x(),  q.w(), -q.z(),  q.y(), \
+           q.y(),  q.z(),  q.w(), -q.x(), \
+           q.z(), -q.y(),  q.x(),  q.w(),
+    
+    return ret;
+}
+
+template<typename T>
+Matrix<T, 4, 4> quatRightMult(const Quaternion<T> &q) {
+    Matrix<T, 4, 4> ret;
+
+    ret << q.w(), -q.x(), -q.y(), -q.z(), \
+           q.x(),  q.w(),  q.z(), -q.y(), \
+           q.y(), -q.z(),  q.w(),  q.x(), \
+           q.z(),  q.y(), -q.x(),  q.w(),
+    
     return ret;
 }
 

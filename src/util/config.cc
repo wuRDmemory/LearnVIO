@@ -17,8 +17,8 @@ int EQUALIZE;
 int ROW;
 int COL;
 int FOCAL_LENGTH;
-int FEN_WINDOW_SIZE;
 int FISHEYE;
+
 bool PUB_THIS_FRAME;
 
 float ACCL_N, GYRO_N;
@@ -27,6 +27,7 @@ float INIT_DEPTH;
 
 double F_THRESHOLD;
 
+Vector3f         Gw;
 vector<Matrix3d> Rics;
 vector<Vector3d> tics;
 
@@ -94,8 +95,8 @@ bool readParameters(string config_path, string vins_path) {
     STEREO_TRACK    = false;
     FOCAL_LENGTH    = 460;
     PUB_THIS_FRAME  = false;
-    FEN_WINDOW_SIZE = 10;
     INIT_DEPTH      = 1;
+    Gw              = Vector3f(0, 0, 9.81);
 
     if (FREQ == 0)
         FREQ = 100;

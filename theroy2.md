@@ -148,7 +148,7 @@ $$
 \frac{\partial{e_v}}{\partial{v_{bi}}} & \frac{\partial{e_v}}{\partial{ba_i}} & \frac{\partial{e_v}}{\partial{bg_i}} \\ 
 \frac{\partial{e_{ba}}}{\partial{v_{bi}}} & \frac{\partial{e_{ba}}}{\partial{ba_i}} & \frac{\partial{e_{ba}}}{\partial{bg_i}} \\ 
 \frac{\partial{e_{bg}}}{\partial{v_{bi}}} & \frac{\partial{e_{bg}}}{\partial{ba_i}} & \frac{\partial{e_{bg}}}{\partial{bg_i}} \\ \end{bmatrix}\\
-&= \begin{bmatrix} -(R^{w}_{bi})^T \Delta{t} & -J^{p}_{ba_i}  & -J^{p}_{bg_i} \\  0 & -J^{q}_{ba_i} & -[[q^{j}_{i}\otimes \overline{q}^{i}_{j}]_{\mathrm{L}}]_{3\times3}J^{q}_{bg_i} \\ -(R^{w}_{bi})^T & -J^{v}_{ba_i}  & -J^{v}_{bg_i} \\ 0 & -I & 0 \\ 0 & 0 &-I \end{bmatrix}\\
+&= \begin{bmatrix} -(R^{w}_{bi})^T \Delta{t} & -J^{p}_{ba_i}  & -J^{p}_{bg_i} \\  0 & 0 & -[[q^{j}_{i}\otimes \overline{q}^{i}_{j}]_{\mathrm{L}}]_{3\times3}J^{q}_{bg_i} \\ -(R^{w}_{bi})^T & -J^{v}_{ba_i}  & -J^{v}_{bg_i} \\ 0 & -I & 0 \\ 0 & 0 &-I \end{bmatrix}\\
 \end{aligned} \tag{9}
 $$
 

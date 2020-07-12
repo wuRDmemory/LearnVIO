@@ -107,12 +107,14 @@ public:
 
     bool addNewFeatures(const Image_Type& image_data, int frame_id);
 
-    // triangle all feature
-    bool trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]);
+    // triangle all features
+    int  trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]);
 
-    bool trianglesNew(Matrix3f Rcw[], Vector3f tcw[]);
+    // triangle new features
+    int  trianglesNew(Matrix3f Rcw[], Vector3f tcw[]);
 
     int size() const { return all_ftr_.size(); }
+
 private:
     float computeParallax(Feature* ftr, int frame_id);
 };
