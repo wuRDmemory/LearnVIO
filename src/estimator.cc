@@ -7,7 +7,8 @@
 #include "../include/visual/project_factor.h"
 #include "../include/inertial/inertial_factor.h"
 
-Estimator::Estimator() {
+Estimator::Estimator() : 
+    first_imu_(true), initial_(false), has_first_(true) {
     temp_preintegrate_= nullptr;
     clearState();
 }
@@ -20,6 +21,7 @@ void Estimator::clearState() {
     frame_count_ = 0;
     first_imu_   = true;
     initial_     = false;
+    has_first_   = true;
 
     if (temp_preintegrate_ != nullptr) {
         delete temp_preintegrate_;
@@ -50,7 +52,7 @@ void Estimator::clearState() {
         BGS_[i].setZero();
     }
 
-    g_.setZero();
+    Gw.setZero();
 
     feature_manager_.clear();
 }
@@ -76,7 +78,9 @@ void Estimator::processImu(double dt, Vector3f accl, Vector3f gyro) {
         accl_b0  = RS_[frame_count_]*(accl_0_-BAS_[frame_count_]);
         
         RS_[frame_count_] *= vec2quat<float>(gyro_mid);
-        accl_b1  = RS_[frame_count_]*(accl   -BAS_[frame_count_]);
+        RS_[frame_count_].normalize();
+        
+        accl_b1  = RS_[frame_count_]*(accl-BAS_[frame_count_]);
 
         accl_mid = (accl_b0 + accl_b1)/2 - Gw;
         PS_[frame_count_] += VS_[frame_count_]*dt + 0.5*accl_mid*dt*dt;
@@ -111,13 +115,12 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
             // enough frame
             // initialize
             bool success = structInitial();
-            if (!success) {
+            if ( success ) {
                 // initial success 
                 initial_ = true;
                 solveOdometry();
                 slideWindow(margin_old);
                 // TODO: remove the unvisual feature in feature manager
-
             } 
             else {
                 slideWindow(margin_old);
@@ -158,7 +161,7 @@ bool Estimator::solveOdometry() {
     }
 
     int new_ftr_cnt = feature_manager_.trianglesNew(Rcw, tcw);
-    LOGD(">>> [new ftr] %d", new_ftr_cnt);
+    LOGD(">>> [new ftr] Triangle new ldmk %d", new_ftr_cnt);
 
     solveOptimize();
 
@@ -201,7 +204,7 @@ bool Estimator::solveNewFrame(map<int, Feature*> &all_features, Matrix3f Rwb, Ve
     cvtPoseFromBodyToCamera(Rwb, twb, Rbc, tbc, Rwc, twc);
 
     Matrix3d Rcw = Rwc.transpose().cast<double>();
-    Vector3d tcw = twc.cast<double>()*Rcw*-1;
+    Vector3d tcw = Rcw*twc.cast<double>()*-1;
 
     cv::Mat cvRcw, rvec, tvec;
     cv::Mat K = cv::Mat::eye(3, 3, CV_64F);
@@ -324,11 +327,12 @@ bool Estimator::structInitial() {
     }
 
     // rotate the c0 to world coordinate
-    Matrix3f Rw1c0 = gravity2Rnb<float>(g_c0.cast<float>());
-    float    yaw   = Rnb2ypr<float>(Rw1c0).x();
-    Matrix3f Rww1  = ypr2Rnb<float>(Vector3f{-yaw, 0, 0});
-
-    Matrix3f Rwc0 = Rww1*Rw1c0;
+    Matrix3f Rwc0 = gravity2Rnb<float>(g_c0.cast<float>());
+    // get the w_R_b0's yaw angle
+    float    yaw   = Rnb2ypr<float>(Rwc0*Matrix3f(RS_[0])).x(); // w_R_c0*c0_R_b0
+    Matrix3f Rb0w  = ypr2Rnb<float>(Vector3f{-yaw, 0, 0});
+    
+    Rwc0  = Rb0w*Rwc0; // correct yaw, regard b0's yaw as w's yaw
     Gw = Rwc0*g_c0.cast<float>();
 
     // change world frame from c0 to world
@@ -338,12 +342,18 @@ bool Estimator::structInitial() {
         VS_[i] = Rwc0*VS_[i];
     }
 
+    Vector3f R0ypr = Rnb2ypr<float>(Matrix3f(RS_[0]));
+    LOGW(">>> [Align] Rwc0: %f, %f, %f", R0ypr.x(), R0ypr.y(), R0ypr.z());
+    LOGW(">>> [Align] final Grivaty: %f, %f, %f", Gw(0), Gw(1), Gw(2));
+
     FILE* file;
     file = fopen("./poses.txt", "w");
     for (int i = 0; i < N; i++) {
-        fprintf(file, "%lf\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
-                    timestamp_[i], RS_[i].x(), RS_[i].y(), RS_[i].z(), RS_[i].w(), 
-                                   PS_[i].x(), PS_[i].y(), PS_[i].z());
+        Vector3f ypr = Rnb2ypr<float>(Matrix3f(RS_[i]));
+        fprintf(file, "%lf\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+                timestamp_[i], ypr.x(), ypr.y(), ypr.z(),
+                               PS_[i].x(), PS_[i].y(), PS_[i].z(),
+                               VS_[i].x(), VS_[i].y(), VS_[i].z());
     }
     fclose(file);
 
@@ -398,9 +408,11 @@ bool Estimator::slideWindow(bool margin_old) {
 
             all_frames_.erase(all_frames_.begin(), iter);
             all_frames_.erase(t0);
-        }   
+        }
 
         slideOldFrame();
+
+        has_first_ = false;
     }
     else {
         // marg second newest frame
@@ -487,6 +499,7 @@ void Estimator::vector2double() {
         point_params[i] = ftr->inv_d_;
         i++;
     }
+    point_count = i;
 }
 
 void Estimator::solveOptimize() {
@@ -495,17 +508,19 @@ void Estimator::solveOptimize() {
 
     // ceres problem
     ceres::Problem problem;
+    // ceres::LossFunction* huber = new ceres::HuberLoss(1.0);
+    ceres::LossFunction* huber = new ceres::CauchyLoss(1.0);
 
     // add pose and motion
     for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
         ceres::LocalParameterization* pose_local = new PoseLocalParameter(); 
-        problem.AddParameterBlock(pose_params[i], POSE_SIZE, pose_local);
+        problem.AddParameterBlock(pose_params[i],   POSE_SIZE,   pose_local);
         problem.AddParameterBlock(motion_params[i], MOTION_SIZE);
     }
 
     // add imu constraint
     for (int i = 1; i <= FEN_WINDOW_SIZE; i++) {
-        Inertial_Factor* iner_factor = new Inertial_Factor(preintegrates_[i]);
+        Inertial_Factor* iner_factor = new Inertial_Factor(i-1, i, preintegrates_[i]);
         problem.AddResidualBlock(iner_factor, NULL, vector<double*>{
             pose_params[i-1], motion_params[i-1],
             pose_params[i-0], motion_params[i-0],
@@ -513,8 +528,174 @@ void Estimator::solveOptimize() {
     }
 
     // add feature constraint
+    VisualCost::sqrt_info_ = FOCAL_LENGTH*Matrix2d::Identity();
+    VisualCost::sum_t_     = 0;
+    VisualCost::Rbc        = Rics[0];
+    VisualCost::tbc        = tics[0];
 
+    int all_vis_edge = 0;
+    int i            = 0;
+    auto &all_ftr    = feature_manager_.all_ftr_;
+    for (auto &id_ftr : all_ftr) {
+        int id       = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (   ftr->size() <= 2 
+            || ftr->ref_frame_id_ >= FEN_WINDOW_SIZE-2
+            || ftr->inv_d_ <= 0) {
+            continue;
+        }
+
+        int ref_frame_id = ftr->ref_frame_id_;
+
+        Vector3f ref_pt = ftr->vis_fs_[0];
+        Vector3f cur_pt = ref_pt;
+        for (int j = 1; j < ftr->size(); j++) {
+            cur_pt = ftr->vis_fs_[j];
+
+            VisualCost* cost = new VisualCost(ref_frame_id, ref_frame_id+j, ref_pt, cur_pt);
+            problem.AddResidualBlock(cost, huber, vector<double*> {
+                pose_params[ref_frame_id], pose_params[ref_frame_id+j], &point_params[i]
+            });
+
+            all_vis_edge ++;
+        }
+
+        i++;
+    }
+    assert(i == point_count);
+    LOGD(">>> [solver] all visual edge: %d", all_vis_edge);
 
     // optimize
+    Tick tic;
 
+    ceres::Solver::Options options;
+    options.linear_solver_type         = ceres::DENSE_SCHUR;
+    options.trust_region_strategy_type = ceres::DOGLEG;
+    options.max_num_iterations         = 10;
+    options.max_solver_time_in_seconds = 1.0;
+
+    ceres::Solver::Summary summary;
+    ceres::Solve(options, &problem, &summary);
+    
+    cout << summary.BriefReport() << endl;
+    LOGD(">>> [solve] Iterations : %d", static_cast<int>(summary.iterations.size()));
+    LOGD(">>> [solve] solver costs: %lf", tic.delta_time());
+
+    // TODO: marginalize
+
+
+    // double to vector
+    double2vector();
+
+    {
+        FILE* fp = fopen("./poses.txt", "a");
+        fprintf(fp, "\n");
+
+        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+            Vector3f ypr = Rnb2ypr<float>(Matrix3f(RS_[i]));
+            fprintf(fp, "%d\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", i, 
+                    ypr(0), ypr(1), ypr(2), PS_[i][0], PS_[i][1], PS_[i][2]);
+        }
+
+        fclose(fp);
+    }
+
+
+}
+
+void Estimator::double2vector() {
+    // correct yaw 
+    Matrix3f Rw0w;  // w0_R_w
+    {   // this place correct the world corrdination,
+        // not  b0 corrdination
+        Matrix3f Rw0b    = RS_[0].toRotationMatrix();
+        Quaternionf Qwb  = Quaternionf(pose_params[0][6], 
+                                     pose_params[0][3], 
+                                     pose_params[0][4], 
+                                     pose_params[0][5]);
+        Matrix3f Rwb     = Qwb.toRotationMatrix();
+
+        // attitude of w00 in b coordination
+        // attitude of w0  in b coordination
+        Vector3f ypr0 = Rnb2ypr<float>(Rw0b.transpose());
+        Vector3f ypr  = Rnb2ypr<float>(Rwb.transpose() );
+
+        if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
+            Rw0w = Rw0b*Rwb.transpose();
+        }
+        else {
+            // only correct 
+            float yw0 = ypr0.x();
+            float yw  = ypr.x();
+
+            // rotate all w0 to w00
+            float diff_w = yw - yw0; // diff between w and w0 
+            Rw0w = ypr2Rnb(Vector3f(diff_w, 0, 0)); // w0_R_w
+        }
+    }
+
+    Vector3f Pw0b = PS_[0];
+
+    int  i = 0;
+    for (i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        // rotate all pose to w0 from w
+        // Pw0b
+        PS_[i] = Rw0w*Vector3f(pose_params[i][0]-pose_params[0][0],
+                               pose_params[i][1]-pose_params[0][1],
+                               pose_params[i][2]-pose_params[0][2]) + Pw0b;
+        
+        // Rw0b
+        Quaternionf Rwb(pose_params[i][6], pose_params[i][3], 
+                        pose_params[i][4], pose_params[i][5]);
+        RS_[i] = Quaternionf(Rw0w) * Rwb.normalized();
+
+        // Vw0b
+        Vector3f Vwb(motion_params[i][0], motion_params[i][1], motion_params[i][2]);
+        VS_[i] = Rw0w*Vwb;
+        
+        // Bias accl
+        BAS_[i].x() = motion_params[i][3];
+        BAS_[i].y() = motion_params[i][4];
+        BAS_[i].z() = motion_params[i][5];
+        
+        // Bias gyro
+        BGS_[i].x() = motion_params[i][6];
+        BGS_[i].y() = motion_params[i][7];
+        BGS_[i].z() = motion_params[i][8];
+    }
+
+    // feature point
+    Matrix3f Rbc = Rics[0].cast<float>();
+    Vector3f tbc = tics[0].cast<float>();
+
+    Matrix3f Rwc;
+    Vector3f twc;
+
+    i = 0;
+    auto &all_ftr = feature_manager_.all_ftr_;
+    for (auto &id_ftr : all_ftr) {
+        int id       = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (   ftr->size() <= 2 
+            || ftr->ref_frame_id_ >= FEN_WINDOW_SIZE-2
+            || ftr->inv_d_ <= 0) {
+            continue;
+        }
+
+        ftr->inv_d_ = point_params[i];
+        
+        // build world 3D point
+        const int j = ftr->ref_frame_id_;
+        Vector3f f  = ftr->vis_fs_[0];
+
+        Rwc = RS_[j].toRotationMatrix()*Rbc;          // w_R_c = w_R_b*b_R_c;
+        twc = PS_[j] + RS_[j].toRotationMatrix()*tbc; // w_t_c = w_t_b + w_R_b*b_t_c
+
+        ftr->pt3d_ = (Rwc*f/ftr->inv_d_ + twc).cast<double>(); // w_P = w_R_c*Pc + w_t_c
+
+        i++;
+    }
+    assert(i == point_count);
 }

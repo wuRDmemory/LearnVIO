@@ -25,9 +25,9 @@ public:
 
     virtual bool ComputeJacobian(const double* x, double* jacobian) const;
 
-    virtual int GlobalSize() const { return 4; }
+    virtual int GlobalSize() const { return 7; }
     
-    virtual int LocalSize() const  { return 3; }
+    virtual int LocalSize() const  { return 6; }
 };
 
 class VisualCost : public ceres::SizedCostFunction<2, 7, 7, 1> {
@@ -39,12 +39,12 @@ public:
     static Vector3d tbc;
 
 private:
-    double focus_length_;
-    Vector2d ref_pt_;
-    Vector2d cur_pt_;
+    int i_, j_;
+    Vector3d ref_pt_;
+    Vector3d cur_pt_;
+
 
 public:
-    VisualCost(const Vector2d& ref_pt, const Vector2d& cur_pt);
+    VisualCost(int i, int j, const Vector3f& ref_pt, const Vector3f& cur_pt);
     virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobian) const;
-    void check(double **parameters);
 };

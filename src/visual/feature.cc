@@ -143,15 +143,18 @@ int FeatureManager::trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]) {
 
         Matrix3f Rrw = Rcw[start_j];
         Vector3f trw = tcw[start_j];
-
+        
+        int j = 0;
         for (Vector3f f : ftr->vis_fs_) {
             Matrix<float, 3, 4> Tcr;
             Tcr.block<3, 3>(0, 0) = Rcw[start_j+j]*Rrw.transpose();
             Tcr.block<3, 1>(0, 3) = tcw[start_j+j] - Tcr.block<3, 3>(0, 0)*trw;
 
-            f.normalize();
+            // f.normalize();
             A.row(rows++) = f(0)*Tcr.row(2) - f(2)*Tcr.row(0);
             A.row(rows++) = f(1)*Tcr.row(2) - f(2)*Tcr.row(1);
+
+            j++;
         }
 
         assert(rows == 2*N);
@@ -173,20 +176,16 @@ int FeatureManager::trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]) {
 
 int FeatureManager::trianglesNew(Matrix3f Rcw[], Vector3f tcw[]) {
     int i = 0;
-    const int N = Rwi.size();
-
-    vector<Matrix3f> Rcw;
-    vector<Vector3f> tcw;
     
     for (auto &id_ptr : all_ftr_) {
         int id       = id_ptr.first;
         Feature* ftr = id_ptr.second;
 
-        if (ftr->size() < 2) {
+        if (ftr->size() <= 2) {
             continue;
         }
 
-        if (ftr->inv_d_ <= 0) {
+        if (ftr->inv_d_ > 0) {
             continue;
         } 
 
@@ -196,9 +195,10 @@ int FeatureManager::trianglesNew(Matrix3f Rcw[], Vector3f tcw[]) {
         int rows = 0;
         int start_j = ftr->ref_frame_id_;
 
-        Matrix3f Rrw = Rcw[start_j].toRotationMatrix();
-        Vector3f trw = tcw[start_j];
+        Matrix3f &Rrw = Rcw[start_j];
+        Vector3f &trw = tcw[start_j];
 
+        int j = 0;
         for (Vector3f f : ftr->vis_fs_) {
             Matrix<float, 3, 4> Tcr;
             Tcr.block<3, 3>(0, 0) = Rcw[start_j+j]*Rrw.transpose();
@@ -207,6 +207,8 @@ int FeatureManager::trianglesNew(Matrix3f Rcw[], Vector3f tcw[]) {
             f.normalize();
             A.row(rows++) = f(0)*Tcr.row(2) - f(2)*Tcr.row(0);
             A.row(rows++) = f(1)*Tcr.row(2) - f(2)*Tcr.row(1);
+
+            j++;
         }
 
         assert(rows == 2*N);

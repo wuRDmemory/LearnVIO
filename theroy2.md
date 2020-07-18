@@ -179,7 +179,7 @@ $$
 \begin{aligned}
 \frac{\partial{e}}{\partial{T_{bj}}} &= \left[\frac{\partial{e}}{\partial{p_{bj}}}, \frac{\partial{e}}{\partial{\theta_{bj}}} \right] \\
 &= \begin{bmatrix} \frac{\partial{e_p}}{\partial{p_{bj}}} & \frac{\partial{e_p}}{\partial{\theta_{bj}}} \\ \frac{\partial{e_q}}{\partial{p_{bj}}} & \frac{\partial{e_q}}{\partial{\theta_{bj}}} \\ \frac{\partial{e_v}}{\partial{p_{bj}}} & \frac{\partial{e_v}}{\partial{\theta_{bj}}} \\ \frac{\partial{e_{ba}}}{\partial{p_{bj}}} & \frac{\partial{e_{ba}}}{\partial{\theta_{bj}}} \\ \frac{\partial{e_{bg}}}{\partial{p_{bj}}} & \frac{\partial{e_{bg}}}{\partial{\theta_{bj}}} \\  \end{bmatrix}\\
-&= \begin{bmatrix} (R^{w}_{bi})^T & 0 \\  0 & \left[ \left[(\overline{q}^{i}_{j} \otimes \mathrm{J}^{q}_{bg}\delta{bg_{i}})^{-1} \otimes q^{i}_{j}  \right]_{\mathrm{R}} \right]_{3\times3} \\ 0 & 0 \\ 0 & 0 \\ 0 & 0 \end{bmatrix}\\
+&= \begin{bmatrix} (R^{w}_{bi})^T & 0 \\  0 & \left[ \left[(\overline{q}^{i}_{j} \otimes \mathrm{J}^{q}_{bg}\delta{bg_{i}})^{-1} \otimes q^{i}_{j}  \right]_{\mathrm{L}} \right]_{3\times3} \\ 0 & 0 \\ 0 & 0 \\ 0 & 0 \end{bmatrix}\\
 \end{aligned} \tag{10}
 $$
 

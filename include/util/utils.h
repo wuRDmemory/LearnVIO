@@ -35,7 +35,7 @@ Matrix<T, 4, 4> quatLeftMult(const Quaternion<T> &q) {
     ret << q.w(), -q.x(), -q.y(), -q.z(), \
            q.x(),  q.w(), -q.z(),  q.y(), \
            q.y(),  q.z(),  q.w(), -q.x(), \
-           q.z(), -q.y(),  q.x(),  q.w(),
+           q.z(), -q.y(),  q.x(),  q.w();
     
     return ret;
 }
@@ -47,7 +47,7 @@ Matrix<T, 4, 4> quatRightMult(const Quaternion<T> &q) {
     ret << q.w(), -q.x(), -q.y(), -q.z(), \
            q.x(),  q.w(),  q.z(), -q.y(), \
            q.y(), -q.z(),  q.w(),  q.x(), \
-           q.z(),  q.y(), -q.x(),  q.w(),
+           q.z(),  q.y(), -q.x(),  q.w();
     
     return ret;
 }

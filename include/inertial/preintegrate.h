@@ -164,6 +164,7 @@ public:
 
         Quaternionf q_k0 = delta_q_;
         Quaternionf q_k1 = q_k0 * vec2quat<float>(gyro_mid_dt);
+        q_k1.normalize();
 
         Vector3f accl_b0 = accl_0_ - accl_bias_;
         Vector3f accl_b1 = accl    - accl_bias_;
@@ -256,13 +257,13 @@ public:
         Vector3d dba = bai - accl_bias_.cast<double>();
         Vector3d dbg = bgi - gyro_bias_.cast<double>();
 
-        Vector3d correct_dp    = delta_p_ + J_p_ba*dba + J_p_bg*dbg;
-        Vector3d correct_dv    = delta_v_ + J_v_ba*dba + J_v_bg*dbg;
-        Quaterniond correct_dq = delta_q_.cast<double>()*vec2quat<double>(dbg);
+        Vector3d correct_dp    = delta_p_.cast<double>() + J_p_ba*dba + J_p_bg*dbg;
+        Vector3d correct_dv    = delta_v_.cast<double>() + J_v_ba*dba + J_v_bg*dbg;
+        Quaterniond correct_dq = (delta_q_.cast<double>()*vec2quat<double>(dbg)).normalized();
 
-        residual.segment<3>(J_OP) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt);
+        residual.segment<3>(J_OP) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt) - correct_dp;
         residual.segment<3>(J_OR) = 2*(correct_dq.inverse()*Rwi.inverse()*Rwj).vec();
-        residual.segment<3>(J_OV) = Rwi.inverse()*(vwj - vwi + G*dt);
+        residual.segment<3>(J_OV) = Rwi.inverse()*(vwj - vwi + G*dt) - correct_dv;
         residual.segment<3>(J_OBA) = baj - bai;
         residual.segment<3>(J_OBW) = bgj - bgi;
         

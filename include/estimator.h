@@ -23,6 +23,7 @@ public:
     
     bool first_imu_;
     bool initial_;
+    bool has_first_;  // has first frame
     
     int frame_count_;
 
@@ -49,6 +50,7 @@ public:
     double pose_params[FEN_WINDOW_SIZE+1][POSE_SIZE]; 
     double motion_params[FEN_WINDOW_SIZE+1][MOTION_SIZE];
     double point_params[1000];
+    int    point_count;
 
 public:
     Estimator();

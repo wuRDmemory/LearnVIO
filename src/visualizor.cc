@@ -3,8 +3,8 @@
 
 void registerPub(ros::NodeHandle &n)
 {
-    pub_path     = n.advertise<nav_msgs::Path>("path", 1000);
-    pub_odometry = n.advertise<nav_msgs::Odometry>("odometry", 1000);
+    // pub_path     = n.advertise<nav_msgs::Path>("path", 1000);
+    // pub_odometry = n.advertise<nav_msgs::Odometry>("odometry", 1000);
 }
 
 void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
