@@ -31,12 +31,11 @@ public:
         i_ = i;
         j_ = j;
 
-        // fp_ = fopen("./inertial_factor.txt", "w");
-        // fclose(fp_);
+        fp_ = fopen("./inertial_factor.txt", "w");
+        fclose(fp_);
     }
 
     virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
-        fp_ = fopen("./inertial_factor.txt", "a");
         
         Eigen::Vector3d    pwi(parameters[0][0], parameters[0][1], parameters[0][2]);
         Eigen::Quaterniond qwi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
@@ -59,17 +58,18 @@ public:
 
         Map<Matrix<double, 15, 1>> res(residuals);
 
-        fprintf(fp_, "%d->%d\n", i_, j_);
-        fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", bai(0), bai(1), bai(2), bgi(0), bgi(1), bgi(2));
-        fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", baj(0), baj(1), baj(2), bgj(0), bgj(1), bgj(2));
-        fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n\n", 
-                residual(0),  residual(1),  residual(2), 
-                residual(3),  residual(4),  residual(5), 
-                residual(6),  residual(7),  residual(8), 
-                residual(9),  residual(10), residual(11), 
-                residual(12), residual(13), residual(14));
+        // fp_ = fopen("./inertial_factor.txt", "a");
+        // fprintf(fp_, "%d->%d\n", i_, j_);
+        // fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", bai(0), bai(1), bai(2), bgi(0), bgi(1), bgi(2));
+        // fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", baj(0), baj(1), baj(2), bgj(0), bgj(1), bgj(2));
+        // fprintf(fp_, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n\n", 
+        //         residual(0),  residual(1),  residual(2), 
+        //         residual(3),  residual(4),  residual(5), 
+        //         residual(6),  residual(7),  residual(8), 
+        //         residual(9),  residual(10), residual(11), 
+        //         residual(12), residual(13), residual(14));
         
-        fclose(fp_);
+        // fclose(fp_);
 
         res = info*residual;
 

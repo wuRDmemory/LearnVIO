@@ -220,6 +220,9 @@ public:
             V.block<3, 3>(J_OV, V_ONA1) = 0.5*R_1*dt;
             V.block<3, 3>(J_OV, V_ONW1) = 0.5*R_1_A_1_x*dt*0.5*dt;
 
+            V.block<3, 3>(J_OBA, V_ONBA) = I*dt;
+            V.block<3, 3>(J_OBW, V_ONBW) = I*dt;
+
             MatrixXd dF = F.cast<double>();
             MatrixXd dV = V.cast<double>();
 
@@ -259,7 +262,7 @@ public:
 
         Vector3d correct_dp    = delta_p_.cast<double>() + J_p_ba*dba + J_p_bg*dbg;
         Vector3d correct_dv    = delta_v_.cast<double>() + J_v_ba*dba + J_v_bg*dbg;
-        Quaterniond correct_dq = (delta_q_.cast<double>()*vec2quat<double>(dbg)).normalized();
+        Quaterniond correct_dq = delta_q_.cast<double>() * vec2quat<double>(J_q_bg*dbg);
 
         residual.segment<3>(J_OP) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt) - correct_dp;
         residual.segment<3>(J_OR) = 2*(correct_dq.inverse()*Rwi.inverse()*Rwj).vec();

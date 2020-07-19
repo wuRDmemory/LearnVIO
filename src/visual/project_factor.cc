@@ -3,8 +3,8 @@
 #include "../../include/util/tick.h"
 
 bool PoseLocalParameter::Plus(const double* x, const double* delta, double* x_plus_delta) const {
-    Vector3d    old_pwb(x);
-    Quaterniond old_qwb(x+3);
+    Map<const Vector3d>    old_pwb(x);
+    Map<const Quaterniond> old_qwb(x+3);
 
     Map<const Vector3d> delta_pwb(delta);
     Map<const Vector3d> delta_qwb(delta+3);
@@ -13,15 +13,20 @@ bool PoseLocalParameter::Plus(const double* x, const double* delta, double* x_pl
     Map<Quaterniond> new_qwb(x_plus_delta+3);
 
     new_pwb = old_pwb + delta_pwb;
-    new_qwb = old_qwb*vec2quat<double>(delta_qwb);
+    new_qwb = old_qwb * vec2quat<double>(delta_qwb);
     new_qwb.normalize();
+
+    FILE* fp = fopen("./delta.txt", "a");
+    fprintf(fp, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", delta[0], delta[1], delta[2], delta[3], delta[4], delta[5]);
+    fclose(fp);
 
     return true;
 }
 
 bool PoseLocalParameter::ComputeJacobian(const double* x, double* jacobian) const {
     Map<Matrix<double, 7, 6, RowMajor>> transfer(jacobian);
-    transfer.setIdentity();
+    transfer.topRows<6>().setIdentity();
+    transfer.bottomRows<1>().setZero();
     return true;
 }
 
@@ -35,7 +40,7 @@ VisualCost::VisualCost(int i, int j, const Vector3f& ref_pt, const Vector3f& cur
     i_ = i;
     j_ = j;
     ref_pt_ = ref_pt.cast<double>();
-    cur_pt_ = cur_pt.cast<double>();   
+    cur_pt_ = cur_pt.cast<double>();
 
     FILE* fp = fopen("./visual_factor.txt", "w");
     fclose(fp);
@@ -66,7 +71,7 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
     res = sqrt_info_*res;
 
     FILE* fp = fopen("./visual_factor.txt", "a");
-    fprintf(fp, "%d->%d  %lf, %lf\n", i_, j_, res(0), res(1));
+    fprintf(fp, "%d->%d  %lf, %lf, %lf, %lf, %lf, %lf\n", i_, j_, res(0), res(1), ref_pt_(0), ref_pt_(1), cur_pt_(0), cur_pt_(1));
     fclose(fp);
 
     if (jacobian) {
@@ -76,16 +81,19 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
 
         reduce = sqrt_info_*reduce;
 
-        if (jacobian[0]) {
+         if (jacobian[0]) {
             // partial of Ti
             Map<Matrix<double, 2, 7, RowMajor>> Jaco(jacobian[0]);
 
             Matrix<double, 3, 6, RowMajor> temp_J;
             temp_J.leftCols<3>().setIdentity();
-            temp_J.rightCols<3>() = -Rwbi*symmetricMatrix(Pbi);
+            temp_J.rightCols<3>() = -Rwbi*symmetricMatrix<double>(Pbi);
 
             Jaco.leftCols<6>() = reduce*Rbc.transpose()*Rwbj.transpose()*temp_J;
             Jaco.rightCols<1>().setZero();
+
+            // Matrix<double, 2, 7> Jaco_temp = Jaco; 
+            // cout << Jaco_temp << endl << endl;
         }
 
         if (jacobian[1]) {
@@ -93,21 +101,27 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
             Map<Matrix<double, 2, 7, RowMajor>> Jaco(jacobian[1]);
 
             Matrix<double, 3, 6, RowMajor> temp_J;
-            temp_J.block<3, 3>(0, 0) = -Rwbj.transpose();
-            temp_J.block<3, 3>(0, 3) = symmetricMatrix(Pbj);
+            temp_J.leftCols<3>()  = -Rwbj.transpose();
+            temp_J.rightCols<3>() = symmetricMatrix<double>(Pbj);
 
             Jaco.leftCols<6>() = reduce*Rbc.transpose()*temp_J;
             Jaco.rightCols<1>().setZero();
+            
+            // Matrix<double, 2, 7> Jaco_temp = Jaco; 
+            // cout << Jaco_temp << endl << endl;
         }
 
         if (jacobian[2]) {
             // partial of inverse_depth
-            Map<Matrix<double, 2, 1>> Jaco(jacobian[2]);
+            Map<Vector2d> Jaco(jacobian[2]);
 
-            Matrix<double, 3, 1> temp_J;
+            Vector3d temp_J;
             temp_J = -Pci/inv_depth; 
 
             Jaco = reduce*Rbc.transpose()*Rwbj.transpose()*Rwbi*Rbc*temp_J;
+            
+            // Vector2d Jaco_temp = Jaco; 
+            // cout << Jaco_temp << endl << endl;
         }
     }
     sum_t_ += tic.delta_time();

@@ -305,26 +305,7 @@ bool Estimator::structInitial() {
         }
     }
 
-    {   // re-triangle all features
-        Matrix3f qcc0[N];
-        Vector3f tcc0[N];
-        Matrix3f Rc0c;
-        Vector3f tc0c;
 
-        Matrix3f Ric = Rics[0].cast<float>();
-        Vector3f tic = tics[0].cast<float>();
-
-        int i = 0;
-        for (i = 0; i < N; i++) {
-            Rc0c = RS_[i].toRotationMatrix()*Ric;      // c0_R_c = c0_R_bk*bk_R_ck
-            tc0c = PS_[i] + RS_[i]*tic;                // c0_P_c = c0_P_bk + c0_R_bk*bk_P_ck
-            
-            qcc0[i] = Rc0c.transpose();
-            tcc0[i] = Rc0c.transpose()*tc0c*-1;
-        }
-
-        feature_manager_.trianglesInitial(qcc0, tcc0);
-    }
 
     // rotate the c0 to world coordinate
     Matrix3f Rwc0 = gravity2Rnb<float>(g_c0.cast<float>());
@@ -346,16 +327,52 @@ bool Estimator::structInitial() {
     LOGW(">>> [Align] Rwc0: %f, %f, %f", R0ypr.x(), R0ypr.y(), R0ypr.z());
     LOGW(">>> [Align] final Grivaty: %f, %f, %f", Gw(0), Gw(1), Gw(2));
 
-    FILE* file;
-    file = fopen("./poses.txt", "w");
-    for (int i = 0; i < N; i++) {
-        Vector3f ypr = Rnb2ypr<float>(Matrix3f(RS_[i]));
-        fprintf(file, "%lf\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
-                timestamp_[i], ypr.x(), ypr.y(), ypr.z(),
-                               PS_[i].x(), PS_[i].y(), PS_[i].z(),
-                               VS_[i].x(), VS_[i].y(), VS_[i].z());
+    {   // re-triangle all features
+        Matrix3f qcw[N];
+        Vector3f tcw[N];
+        Matrix3f Rwc;
+        Vector3f twc;
+
+        Matrix3f Ric = Rics[0].cast<float>();
+        Vector3f tic = tics[0].cast<float>();
+
+        int i = 0;
+        for (i = 0; i < N; i++) {
+            Rwc = RS_[i].toRotationMatrix()*Ric;      // c0_R_c = c0_R_bk*bk_R_ck
+            twc = PS_[i] + RS_[i]*tic;                // c0_P_c = c0_P_bk + c0_R_bk*bk_P_ck
+            
+            qcw[i] = Rwc.transpose();
+            tcw[i] = Rwc.transpose()*twc*-1;
+        }
+
+        feature_manager_.trianglesInitial(qcw, tcw);
     }
-    fclose(file);
+
+    {
+        FILE* file;
+        file = fopen("./poses.txt", "w");
+        for (int i = 0; i < N; i++) {
+            Vector3f ypr = Rnb2ypr<float>(Matrix3f(RS_[i]));
+            fprintf(file, "%lf\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", 
+                    timestamp_[i], ypr.x(), ypr.y(), ypr.z(),
+                                PS_[i].x(), PS_[i].y(), PS_[i].z(),
+                                VS_[i].x(), VS_[i].y(), VS_[i].z());
+        }
+        fclose(file);
+    }
+
+    {
+        FILE* fp;
+        fp = fopen("./motion.txt", "w");
+        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+            fprintf(fp, "%d\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", i, 
+                    VS_[i][0], VS_[i][1], VS_[i][2], 
+                    BAS_[i][0], BAS_[i][1], BAS_[i][2], 
+                    BGS_[i][0], BGS_[i][1], BGS_[i][2]);
+        }        
+        fclose(fp);
+
+    }
 
     return true;
 }
@@ -508,8 +525,8 @@ void Estimator::solveOptimize() {
 
     // ceres problem
     ceres::Problem problem;
-    // ceres::LossFunction* huber = new ceres::HuberLoss(1.0);
-    ceres::LossFunction* huber = new ceres::CauchyLoss(1.0);
+    ceres::LossFunction* loss = new ceres::HuberLoss(1.0);
+    // ceres::LossFunction* huber = new ceres::CauchyLoss(1.0);
 
     // add pose and motion
     for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
@@ -521,17 +538,17 @@ void Estimator::solveOptimize() {
     // add imu constraint
     for (int i = 1; i <= FEN_WINDOW_SIZE; i++) {
         Inertial_Factor* iner_factor = new Inertial_Factor(i-1, i, preintegrates_[i]);
-        problem.AddResidualBlock(iner_factor, NULL, vector<double*>{
-            pose_params[i-1], motion_params[i-1],
-            pose_params[i-0], motion_params[i-0],
-        });
+        problem.AddResidualBlock(iner_factor, NULL, 
+            pose_params[i-1], motion_params[i-1], pose_params[i], motion_params[i]);
     }
 
     // add feature constraint
-    VisualCost::sqrt_info_ = FOCAL_LENGTH*Matrix2d::Identity();
+    VisualCost::sqrt_info_ = FOCAL_LENGTH/1.5*Matrix2d::Identity();
     VisualCost::sum_t_     = 0;
     VisualCost::Rbc        = Rics[0];
     VisualCost::tbc        = tics[0];
+
+    // cv::Mat show(ROW, COL, CV_8UC3, cv::Scalar::all(0));
 
     int all_vis_edge = 0;
     int i            = 0;
@@ -546,25 +563,42 @@ void Estimator::solveOptimize() {
             continue;
         }
 
+        problem.AddParameterBlock(&point_params[i], 1);
+
         int ref_frame_id = ftr->ref_frame_id_;
 
         Vector3f ref_pt = ftr->vis_fs_[0];
         Vector3f cur_pt = ref_pt;
+
+        cv::Point p1(ref_pt(0)*FOCAL_LENGTH+COL/2, cur_pt(1)*FOCAL_LENGTH+ROW/2);
+        cv::Point p2;
+
         for (int j = 1; j < ftr->size(); j++) {
             cur_pt = ftr->vis_fs_[j];
 
+            assert(ref_frame_id + j <= FEN_WINDOW_SIZE);
+
+            // p2 = cv::Point(cur_pt(0)*FOCAL_LENGTH+COL/2, cur_pt(1)*FOCAL_LENGTH+ROW/2);
+            // cv::circle(show, p1, 2,  cv::Scalar(0, 0, 255), 1);
+            // cv::circle(show, p2, 2,  cv::Scalar(0, 0, 255), 1);
+            // cv::line(  show, p1, p2, cv::Scalar(0, 255, 0), 1);
+            // p1 = p2;
+
             VisualCost* cost = new VisualCost(ref_frame_id, ref_frame_id+j, ref_pt, cur_pt);
-            problem.AddResidualBlock(cost, huber, vector<double*> {
+            problem.AddResidualBlock(cost, loss, vector<double*> {
                 pose_params[ref_frame_id], pose_params[ref_frame_id+j], &point_params[i]
             });
 
-            all_vis_edge ++;
+            all_vis_edge++;
         }
 
         i++;
     }
     assert(i == point_count);
     LOGD(">>> [solver] all visual edge: %d", all_vis_edge);
+    
+    // cv::imshow("point track", show);
+    // cv::waitKey();
 
     // optimize
     Tick tic;
@@ -572,6 +606,7 @@ void Estimator::solveOptimize() {
     ceres::Solver::Options options;
     options.linear_solver_type         = ceres::DENSE_SCHUR;
     options.trust_region_strategy_type = ceres::DOGLEG;
+    options.minimizer_progress_to_stdout = true;
     options.max_num_iterations         = 10;
     options.max_solver_time_in_seconds = 1.0;
 
@@ -599,9 +634,21 @@ void Estimator::solveOptimize() {
         }
 
         fclose(fp);
-    }
+    } 
 
+    {
+        FILE* fp = fopen("./motion.txt", "a");
+        fprintf(fp, "\n");
 
+        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+            fprintf(fp, "%d\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", i, 
+                    VS_[i][0], VS_[i][1], VS_[i][2], 
+                    BAS_[i][0], BAS_[i][1], BAS_[i][2], 
+                    BGS_[i][0], BGS_[i][1], BGS_[i][2]);
+        }
+
+        fclose(fp);
+    } 
 }
 
 void Estimator::double2vector() {

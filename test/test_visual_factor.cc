@@ -15,15 +15,17 @@ using namespace cv;
 using namespace Eigen;
 
 int main(int argc, char** argv) {
-    Vector3f ref_pt(0.1, 0.1, 1);
-    Vector3f cur_pt(0.06, 0.12, 1);
+    Vector3f ref_pt(-0.057741, -0.039850, 1);
+    Vector3f cur_pt(-0.052518, -0.087913, 1);
 
-    VisualCost::Rbc.setIdentity();
-    VisualCost::tbc.setZero();
+    VisualCost::Rbc <<  0.0148655, -0.999881, 0.0041403, \
+                        0.999557,  0.0149672, 0.0257155, \
+                        -0.0257744, 0.00375619, 0.999661;
+    VisualCost::tbc << -0.0216401, -0.064677, 0.00981073;
     VisualCost::sqrt_info_.setIdentity();
     VisualCost::sum_t_ = 0;
 
-    VisualCost* cost = new VisualCost(ref_pt, cur_pt);
+    VisualCost* cost = new VisualCost(0, 1, ref_pt, cur_pt);
 
     double** parameters = new double*[3];
     parameters[0] = new double[POSE_SIZE]{0};
