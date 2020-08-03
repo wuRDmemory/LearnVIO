@@ -36,15 +36,15 @@ public:
     vector<PreIntegrate*> preintegrates_;
 
     vector<double>      timestamp_;
-    vector<Quaternionf> RS_;   // world is real world, RS[i] mean w_R_bk
-    vector<Vector3f>    VS_;
-    vector<Vector3f>    PS_;
-    vector<Vector3f>    BAS_;
-    vector<Vector3f>    BGS_;
+    vector<Quaterniond> RS_;   // world is real world, RS[i] mean w_R_bk
+    vector<Vector3d>    VS_;
+    vector<Vector3d>    PS_;
+    vector<Vector3d>    BAS_;
+    vector<Vector3d>    BGS_;
 
     map<double, FrameStruct> all_frames_;
-    Vector3f accl_0_;
-    Vector3f gyro_0_;
+    Vector3d accl_0_;
+    Vector3d gyro_0_;
 
     // optimize variables
     double pose_params[FEN_WINDOW_SIZE+1][POSE_SIZE]; 
@@ -56,7 +56,7 @@ public:
     Estimator();
     ~Estimator();
 
-    void processImu(double dt, Vector3f accl, Vector3f gyro);
+    void processImu(double dt, const Vector3d& accl, const Vector3d& gyro);
 
     void processImage(double timestamp, Image_Type& image);
 
@@ -73,7 +73,7 @@ private:
 
     bool slideNewFrame();
 
-    bool solveNewFrame(map<int, Feature*> &all_features, Matrix3f Rcw, Vector3f tcw);
+    bool solveNewFrame(map<int, Feature*> &all_features, Matrix3d Rcw, Vector3d tcw);
 
     void vector2double();
 

@@ -35,3 +35,6 @@ extern ros::Publisher pub_pose_graph;
 extern int IMAGE_ROW, IMAGE_COL;
 
 
+void registerPub(ros::NodeHandle &n);
+void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
+void pubKeyFrame(const Estimator& estimator, const std_msgs::Header& header);

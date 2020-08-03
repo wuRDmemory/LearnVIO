@@ -15,8 +15,8 @@ using namespace cv;
 using namespace Eigen;
 
 int main(int argc, char** argv) {
-    Vector3f ref_pt(-0.057741, -0.039850, 1);
-    Vector3f cur_pt(-0.052518, -0.087913, 1);
+    Vector3d ref_pt(-0.057741, -0.039850, 1);
+    Vector3d cur_pt(-0.052518, -0.087913, 1);
 
     VisualCost::Rbc <<  0.0148655, -0.999881, 0.0041403, \
                         0.999557,  0.0149672, 0.0257155, \

@@ -14,7 +14,7 @@
 class PinholeCamera: virtual public CameraModel {
     protected:
         float fx_, fy_, cx_, cy_;
-        float d0_, d1_, d2_, d3_, d4_;
+        float k1_, k2_, p1_, p2_, k3_;
 
         Eigen::Matrix3f K_, invK_;
         Eigen::Matrix<float, 1, 5> D_;
@@ -29,7 +29,7 @@ class PinholeCamera: virtual public CameraModel {
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
         PinholeCamera(int width, int height, string name, float fx, float fy, float cx, float cy, 
-                      float d0=0, float d1=0, float d2=0, float d3=0, float d4=0);
+                      float k1=0, float k2=0, float p1=0, float p2=0, float k3=0);
         virtual ~PinholeCamera();
 
         virtual Eigen::Vector3f cam2world(const float& x, const float& y) const;
@@ -39,6 +39,8 @@ class PinholeCamera: virtual public CameraModel {
         virtual Eigen::Vector2f world2cam(const Eigen::Vector3f& xyz_c) const;
 
         virtual Eigen::Vector2f world2cam(const Eigen::Vector2f& uv) const;
+
+        Vector2f distortion(const Eigen::Vector2f& p_u) const;
 
         const Eigen::Vector2f focal_length() const { return Vector2f(fx_, fy_);}
 

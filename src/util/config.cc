@@ -27,7 +27,7 @@ float INIT_DEPTH;
 
 double F_THRESHOLD;
 
-Vector3f         Gw;
+Vector3d         Gw;
 vector<Matrix3d> Rics;
 vector<Vector3d> tics;
 
@@ -61,10 +61,10 @@ bool readParameters(string config_path, string vins_path) {
     EQUALIZE    = fs["equalize"];
     FISHEYE     = fs["fisheye"];
 
-    ACCL_N      = fs["accl_noise"];
-    GYRO_N      = fs["gyro_noise"];
-    ACCL_BIAS_N = fs["accl_bias_noise"];
-    GYRO_BIAS_N = fs["gyro_bias_noise"];
+    ACCL_N      = fs["accl_n"];
+    GYRO_N      = fs["gyro_n"];
+    ACCL_BIAS_N = fs["accl_w"];
+    GYRO_BIAS_N = fs["gyro_w"];
 
     {   // read extrinsic parameter
         cv::Mat cv_R, cv_T;
@@ -96,7 +96,7 @@ bool readParameters(string config_path, string vins_path) {
     FOCAL_LENGTH    = 460;
     PUB_THIS_FRAME  = false;
     INIT_DEPTH      = 1;
-    Gw              = Vector3f(0, 0, 9.81);
+    Gw              = Vector3d(0, 0, 9.81);
 
     if (FREQ == 0)
         FREQ = 100;

@@ -35,27 +35,23 @@ using namespace Eigen;
 
 class PreIntegrate {
 public:
-    float sum_dt_;
+    double sum_dt_;
 
-    vector<double> dt_buf_;
-    vector<Vector3f> accl_buf_;
-    vector<Vector3f> gyro_buf_;
+    vector<double>   dt_buf_;
+    vector<Vector3d> accl_buf_;
+    vector<Vector3d> gyro_buf_;
 
-    Vector3f accl_bias_, gyro_bias_;
+    Vector3d accl_bias_, gyro_bias_;
 
-    Vector3f accl_0_, gyro_0_;
-    Vector3f accl_1_, gyro_1_;    
+    Vector3d accl_0_, gyro_0_;
+    Vector3d accl_1_, gyro_1_;    
 
-    Vector3f    delta_p_;
-    Vector3f    delta_v_;
-    Quaternionf delta_q_;
+    Vector3d    delta_p_;
+    Vector3d    delta_v_;
+    Quaterniond delta_q_;
 
-    Vector3f    result_delta_p_;
-    Vector3f    result_delta_v_;
-    Quaternionf result_delta_q_;
-
-    Vector3f    result_accl_bias_;
-    Vector3f    result_gyro_bias_;
+    Vector3d    result_accl_bias_;
+    Vector3d    result_gyro_bias_;
 
     // jaconbian
     Matrix<double, J_NUMS, J_NUMS>   Jacobian_;
@@ -70,8 +66,8 @@ public:
 public:
 
     PreIntegrate() {}
-    PreIntegrate(const Vector3f& accl0,      const Vector3f& gyro0, 
-                 const Vector3f& bias_accl,  const Vector3f& bias_gyro):
+    PreIntegrate(const Vector3d& accl0,      const Vector3d& gyro0, 
+                 const Vector3d& bias_accl,  const Vector3d& bias_gyro):
                  accl_0_(accl0),        gyro_0_(gyro0), 
                  accl_bias_(bias_accl), gyro_bias_(bias_gyro), 
                  sum_dt_(0) {
@@ -80,17 +76,13 @@ public:
         delta_q_.setIdentity();
 
         Jacobian_.setIdentity();
-        covariance_.setIdentity();
-
-        result_delta_p_.setZero();
-        result_delta_v_.setZero();
-        result_delta_q_.setIdentity();
+        covariance_.setZero();
 
         dt_buf_.clear();
         accl_buf_.clear();
         gyro_buf_.clear();
 
-        dt_buf_.push_back(0.0f);
+        dt_buf_.push_back(0.0);
         accl_buf_.push_back(accl0);
         gyro_buf_.push_back(gyro0);
 
@@ -110,19 +102,19 @@ public:
     }
 
     // integration
-    void push_back(double dt, const Vector3f& accl, const Vector3f& gyro) {
+    void push_back(double dt, const Vector3d& accl, const Vector3d& gyro) {
         dt_buf_.push_back(dt);
         accl_buf_.push_back(accl);
         gyro_buf_.push_back(gyro);
         integrate(dt, accl, gyro);
     }
 
-    void reintegrate(Vector3f accl_bias, Vector3f gyro_bias) {
+    void reintegrate(const Vector3d &accl_bias, const Vector3d &gyro_bias) {
         sum_dt_ = 0;
 
         // reset variables
         Jacobian_.setIdentity();
-        covariance_.setIdentity();
+        covariance_.setZero();
 
         delta_p_.setZero();
         delta_v_.setZero();
@@ -133,70 +125,91 @@ public:
 
         accl_0_ = accl_buf_[0];
         gyro_0_ = gyro_buf_[0];
+
         for (int i = 1; i < accl_buf_.size(); i++) {
             integrate(dt_buf_[i], accl_buf_[i], gyro_buf_[i]);
         }
     }
 
-    void integrate(double dt, const Vector3f& accl, const Vector3f& gyro) {
+    void integrate(double dt, const Vector3d& accl, const Vector3d& gyro) {
+        Quaterniond delta_q1_;
+        Vector3d    delta_p1_;
+        Vector3d    delta_v1_;
+        Vector3d    accl_bias1_;
+        Vector3d    gyro_bias1_;
 
-        midPointIntegrate(dt, accl, gyro);
+        accl_1_ = accl;
+        gyro_1_ = gyro;
 
-        delta_p_ = result_delta_p_;
-        delta_v_ = result_delta_v_;
-        delta_q_ = result_delta_q_;
-        delta_q_.normalize();
+        midPointIntegrate(dt, \
+                          delta_q_,  delta_p_,  delta_v_,  accl_bias_,  gyro_bias_, \
+                          delta_q1_, delta_p1_, delta_v1_, accl_bias1_, gyro_bias1_);
 
-        accl_bias_ = result_accl_bias_;
-        gyro_bias_ = result_gyro_bias_;       
+        delta_p_ = delta_p1_;
+        delta_v_ = delta_v1_;
+        delta_q_ = delta_q1_.normalized();
 
-        accl_0_ = accl;
-        gyro_0_ = gyro;
+        accl_bias_ = accl_bias1_;
+        gyro_bias_ = gyro_bias1_;
+
+        accl_0_ = accl_1_;
+        gyro_0_ = gyro_1_;
 
         sum_dt_ += dt;
     }
 
-    void midPointIntegrate(float dt, const Vector3f& accl, const Vector3f& gyro) {
-        const float dt2 = dt*dt;
+    void midPointIntegrate(double dt, 
+                           const Quaterniond& delta_q0, const Vector3d& delta_p0, const Vector3d& delta_v0, 
+                           const Vector3d&  accl_bias0, const Vector3d& gyro_bias0, 
+                           Quaterniond& delta_q1, Vector3d& delta_p1, Vector3d& delta_v1, 
+                           Vector3d&  accl_bias1, Vector3d& gyro_bias1) {
+        const double dt2 = dt*dt;
         
-        Vector3f gyro_mid    = (gyro + gyro_0_)/2 - gyro_bias_;
-        Vector3f gyro_mid_dt = gyro_mid*dt;
+        Vector3d gyro_mid    = (gyro_1_ + gyro_0_)/2 - gyro_bias0;
+        Vector3d gyro_mid_dt = gyro_mid*dt;
 
-        Quaternionf q_k0 = delta_q_;
-        Quaternionf q_k1 = q_k0 * vec2quat<float>(gyro_mid_dt);
-        q_k1.normalize();
+        delta_q1 = delta_q0 * vec2quat(gyro_mid_dt);
+        delta_q1.normalize();
 
-        Vector3f accl_b0 = accl_0_ - accl_bias_;
-        Vector3f accl_b1 = accl    - accl_bias_;
+        Vector3d accl_b0 = accl_0_ - accl_bias_;
+        Vector3d accl_b1 = accl_1_ - accl_bias_;
 
-        Vector3f accl_k0 = q_k0*(accl_b0);
-        Vector3f accl_k1 = q_k1*(accl_b1);
+        Vector3d accl_k0 = delta_q0*accl_b0;
+        Vector3d accl_k1 = delta_q1*accl_b1;
         
+        Vector3d mid_accl = (accl_k0+accl_k1)/2;
+
+        delta_p1 = delta_p0 + delta_v0*dt + mid_accl*dt2/2;
+        delta_v1 = delta_v0 + mid_accl*dt;
+
+        accl_bias1 = accl_bias0;
+        gyro_bias1 = gyro_bias0;
+
         {   // preintegrate
-            Matrix<float, J_NUMS, J_NUMS> F;
+            Matrix<double, J_NUMS, J_NUMS> F;
             F.setIdentity();
 
-            Matrix<float, J_NUMS, J_NOISE> V;
+            Matrix<double, J_NUMS, J_NOISE> V;
             V.setZero();
 
-            Matrix3f I   = Matrix3f::Identity();
+            Matrix3d I   = Matrix3d::Identity();
 
-            Matrix3f R_0 = q_k0.toRotationMatrix();
-            Matrix3f R_1 = q_k1.toRotationMatrix();
+            Matrix3d R_0 = delta_q0.toRotationMatrix();
+            Matrix3d R_1 = delta_q1.toRotationMatrix();
 
-            Matrix3f accl_b0_x = symmetricMatrix(accl_b0);  // [acc0-bias_a]_x
-            Matrix3f accl_b1_x = symmetricMatrix(accl_b1);  // [acc1-bias_a]_x
+            Matrix3d accl_b0_x = symmetricMatrix(accl_b0);  // [acc0-bias_a]_x
+            Matrix3d accl_b1_x = symmetricMatrix(accl_b1);  // [acc1-bias_a]_x
 
-            Matrix3f gyro_mid_x = symmetricMatrix(gyro_mid);  // [[w0+w1]/2-bias_w]_x
+            Matrix3d gyro_mid_x = symmetricMatrix(gyro_mid);  // [[w0+w1]/2-bias_w]_x
 
-            Matrix3f item_accl_k0 = -R_0*accl_b0_x;
-            Matrix3f item_accl_k1 = -R_1*accl_b1_x*(I-gyro_mid_x*dt);
+            Matrix3d item_accl_k0 = -R_0*accl_b0_x;
+            Matrix3d item_accl_k1 = -R_1*accl_b1_x*(I-gyro_mid_x*dt);
 
             //!< step F
             F.block<3, 3>(J_OP, J_OR)  = 0.25*(item_accl_k0 + item_accl_k1)*dt2;
             F.block<3, 3>(J_OP, J_OV)  = I*dt;
             F.block<3, 3>(J_OP, J_OBA) = -0.25*(R_0 + R_1)*dt2;
-            F.block<3, 3>(J_OP, J_OBW) = 0.25*(R_1*accl_b1_x*dt2*dt);
+            F.block<3, 3>(J_OP, J_OBW) = 0.25*(-R_1*accl_b1_x*dt2*-dt);
 
             F.block<3, 3>(J_OR, J_OR)  = I - gyro_mid_x*dt;
             F.block<3, 3>(J_OR, J_OBW) = I*(-dt);
@@ -206,7 +219,7 @@ public:
             F.block<3, 3>(J_OV, J_OBW) = 0.5*(R_1*accl_b1_x*dt*dt);
 
             //!< step V
-            Matrix3f R_1_A_1_x = -R_1*accl_b1_x;
+            Matrix3d R_1_A_1_x = -R_1*accl_b1_x;
             V.block<3, 3>(J_OP, V_ONA0) = 0.25*R_0*dt2;
             V.block<3, 3>(J_OP, V_ONW0) = 0.25*R_1_A_1_x*dt2*0.5*dt;
             V.block<3, 3>(J_OP, V_ONA1) = 0.25*R_1*dt2;
@@ -222,25 +235,15 @@ public:
 
             V.block<3, 3>(J_OBA, V_ONBA) = I*dt;
             V.block<3, 3>(J_OBW, V_ONBW) = I*dt;
-
-            MatrixXd dF = F.cast<double>();
-            MatrixXd dV = V.cast<double>();
+            // cout << "A" << endl;
+            // cout << V << endl << endl;
 
             // update jacobian
-            Jacobian_   = dF*Jacobian_;
+            Jacobian_   = F*Jacobian_;
             
             // update covariance
-            covariance_ = dF*covariance_*dF.transpose() + dV*noise_*dV.transpose();
+            covariance_ = F*covariance_*F.transpose() + V*noise_*V.transpose();
         }
-
-        Vector3f mid_accl = (accl_k0+accl_k1)/2;
-
-        result_delta_p_ = delta_p_ + delta_v_*dt + mid_accl*dt*dt/2;
-        result_delta_v_ = delta_v_ + mid_accl*dt;
-        result_delta_q_ = q_k1;
-
-        result_accl_bias_ = accl_bias_;
-        result_gyro_bias_ = gyro_bias_;
     }
 
     Matrix<double, 15, 1> 
@@ -248,27 +251,27 @@ public:
              const Quaterniond& Rwj, const Vector3d& pwj, const Vector3d& vwj, const Vector3d& baj, const Vector3d& bgj) {
                  
         const double dt = sum_dt_;
-        Vector3d G = Gw.cast<double>();
+        Vector3d G = Gw;
         Matrix<double, 15, 1> residual;
         
-        Matrix3d J_p_ba = Jacobian_.block<3, 3>(J_OP, J_OBA).cast<double>();
-        Matrix3d J_p_bg = Jacobian_.block<3, 3>(J_OP, J_OBW).cast<double>();
-        Matrix3d J_v_ba = Jacobian_.block<3, 3>(J_OV, J_OBA).cast<double>();
-        Matrix3d J_v_bg = Jacobian_.block<3, 3>(J_OV, J_OBW).cast<double>();
-        Matrix3d J_q_bg = Jacobian_.block<3, 3>(J_OR, J_OBW).cast<double>();
+        Matrix3d J_p_ba = Jacobian_.block<3, 3>(J_OP, J_OBA);
+        Matrix3d J_p_bg = Jacobian_.block<3, 3>(J_OP, J_OBW);
+        Matrix3d J_v_ba = Jacobian_.block<3, 3>(J_OV, J_OBA);
+        Matrix3d J_v_bg = Jacobian_.block<3, 3>(J_OV, J_OBW);
+        Matrix3d J_q_bg = Jacobian_.block<3, 3>(J_OR, J_OBW);
 
-        Vector3d dba = bai - accl_bias_.cast<double>();
-        Vector3d dbg = bgi - gyro_bias_.cast<double>();
+        Vector3d dba = bai - accl_bias_;
+        Vector3d dbg = bgi - gyro_bias_;
 
-        Vector3d correct_dp    = delta_p_.cast<double>() + J_p_ba*dba + J_p_bg*dbg;
-        Vector3d correct_dv    = delta_v_.cast<double>() + J_v_ba*dba + J_v_bg*dbg;
-        Quaterniond correct_dq = delta_q_.cast<double>() * vec2quat<double>(J_q_bg*dbg);
+        Vector3d correct_dp    = delta_p_ + J_p_ba*dba + J_p_bg*dbg;
+        Vector3d correct_dv    = delta_v_ + J_v_ba*dba + J_v_bg*dbg;
+        Quaterniond correct_dq = delta_q_ * vec2quat<double>(J_q_bg*dbg);
 
-        residual.segment<3>(J_OP) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt) - correct_dp;
-        residual.segment<3>(J_OR) = 2*(correct_dq.inverse()*Rwi.inverse()*Rwj).vec();
-        residual.segment<3>(J_OV) = Rwi.inverse()*(vwj - vwi + G*dt) - correct_dv;
-        residual.segment<3>(J_OBA) = baj - bai;
-        residual.segment<3>(J_OBW) = bgj - bgi;
+        residual.block<3, 1>(J_OP,  0) = Rwi.inverse()*(pwj - pwi - vwi*dt + 0.5*G*dt*dt) - correct_dp;
+        residual.block<3, 1>(J_OR,  0) = 2*(correct_dq.inverse()*Rwi.inverse()*Rwj).vec();
+        residual.block<3, 1>(J_OV,  0) = Rwi.inverse()*(vwj - vwi + G*dt) - correct_dv;
+        residual.block<3, 1>(J_OBA, 0) = baj - bai;
+        residual.block<3, 1>(J_OBW, 0) = bgj - bgi;
         
         return residual;
     }

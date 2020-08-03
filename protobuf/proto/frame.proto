@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package PbFrame;
+
+import "math.proto";
+
+message Estimator {
+    repeated PbMath.Quaternion RS = 1;
+    repeated PbMath.Quaternion PS = 2;
+    repeated PbMath.Quaternion VS = 3;
+    
+}

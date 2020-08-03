@@ -39,7 +39,7 @@ extern float ACCL_N, GYRO_N;
 extern float ACCL_BIAS_N, GYRO_BIAS_N;
 extern float INIT_DEPTH;
 
-extern Vector3f         Gw;
+extern Vector3d         Gw;
 extern vector<Matrix3d> Rics;
 extern vector<Vector3d> tics;
 

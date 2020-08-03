@@ -28,9 +28,39 @@ Matrix<T, 3, 3> symmetricMatrix(const Matrix<T, 3, 1>& vec) {
     return ret;
 }
 
+template <typename Derived>
+Eigen::Quaternion<typename Derived::Scalar> positify(const Eigen::QuaternionBase<Derived> &q)
+{
+    //printf("a: %f %f %f %f", q.w(), q.x(), q.y(), q.z());
+    //Eigen::Quaternion<typename Derived::Scalar> p(-q.w(), -q.x(), -q.y(), -q.z());
+    //printf("b: %f %f %f %f", p.w(), p.x(), p.y(), p.z());
+    //return q.template w() >= (typename Derived::Scalar)(0.0) ? q : Eigen::Quaternion<typename Derived::Scalar>(-q.w(), -q.x(), -q.y(), -q.z());
+    return q;
+}
+
+// template <typename Derived>
+// Eigen::Matrix<typename Derived::Scalar, 4, 4> quatLeftMult(const Eigen::QuaternionBase<Derived> &q)
+// {
+//     Eigen::Quaternion<typename Derived::Scalar> qq = positify(q);
+//     Eigen::Matrix<typename Derived::Scalar, 4, 4> ans;
+//     ans(0, 0) = qq.w(), ans.template block<1, 3>(0, 1) = -qq.vec().transpose();
+//     ans.template block<3, 1>(1, 0) = qq.vec(), ans.template block<3, 3>(1, 1) = qq.w() * Eigen::Matrix<typename Derived::Scalar, 3, 3>::Identity() + symmetricMatrix<typename Derived::Scalar>(qq.vec());
+//     return ans;
+// }
+
+// template <typename Derived>
+// Eigen::Matrix<typename Derived::Scalar, 4, 4> quatRightMult(const Eigen::QuaternionBase<Derived> &p)
+// {
+//     Eigen::Quaternion<typename Derived::Scalar> pp = positify(p);
+//     Eigen::Matrix<typename Derived::Scalar, 4, 4> ans;
+//     ans(0, 0) = pp.w(), ans.template block<1, 3>(0, 1) = -pp.vec().transpose();
+//     ans.template block<3, 1>(1, 0) = pp.vec(), ans.template block<3, 3>(1, 1) = pp.w() * Eigen::Matrix<typename Derived::Scalar, 3, 3>::Identity() - symmetricMatrix<typename Derived::Scalar>(pp.vec());
+//     return ans;
+// }
+
 template<typename T>
 Matrix<T, 4, 4> quatLeftMult(const Quaternion<T> &q) {
-    Matrix<T, 4, 4> ret;
+    Matrix<T, 4, 4, RowMajor> ret;
 
     ret << q.w(), -q.x(), -q.y(), -q.z(), \
            q.x(),  q.w(), -q.z(),  q.y(), \
@@ -42,7 +72,7 @@ Matrix<T, 4, 4> quatLeftMult(const Quaternion<T> &q) {
 
 template<typename T>
 Matrix<T, 4, 4> quatRightMult(const Quaternion<T> &q) {
-    Matrix<T, 4, 4> ret;
+    Matrix<T, 4, 4, RowMajor> ret;
 
     ret << q.w(), -q.x(), -q.y(), -q.z(), \
            q.x(),  q.w(),  q.z(), -q.y(), \
@@ -53,7 +83,7 @@ Matrix<T, 4, 4> quatRightMult(const Quaternion<T> &q) {
 }
 
 template<typename T>
-Quaternion<T> vec2quat(const Matrix<T, 3, 1>& vec) {
+Quaternion<T> vec2quat(Matrix<T, 3, 1> vec) {
     Quaternion<T> ret;
 
     T x = vec(0, 0);

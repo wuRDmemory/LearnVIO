@@ -291,7 +291,7 @@ int solveRTByPnP(int id1, map<int, Feature*>& all_ftr, set<int>& vis_ftr_id, Mat
             continue;
         }
 
-        Vector3f norm_point = ftr->getF(id1);
+        Vector3d norm_point = ftr->getF(id1);
         point3d.push_back(Point3f(ftr->pt3d_.x(), ftr->pt3d_.y(), ftr->pt3d_.z()));
         point2d.push_back(Point2f(norm_point.x(), norm_point.y()));
     }
@@ -390,7 +390,7 @@ int globalRefineBA(map<int, Feature*>& all_ftr, vector<FrameStruct*>& frames, in
 
             problem.AddParameterBlock(xyzs[ftr_id], 3);
 
-            Vector3f obs = ftr->getF(i);
+            Vector3d obs = ftr->getF(i);
             ceres::CostFunction* cost = ReprojectionError3D::Create(obs.x(), obs.y());
 
             problem.AddResidualBlock(cost, NULL, Tcws[i].second, Tcws[i].first, xyzs[ftr_id]);

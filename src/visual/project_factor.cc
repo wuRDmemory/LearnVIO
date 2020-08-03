@@ -16,9 +16,9 @@ bool PoseLocalParameter::Plus(const double* x, const double* delta, double* x_pl
     new_qwb = old_qwb * vec2quat<double>(delta_qwb);
     new_qwb.normalize();
 
-    FILE* fp = fopen("./delta.txt", "a");
-    fprintf(fp, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", delta[0], delta[1], delta[2], delta[3], delta[4], delta[5]);
-    fclose(fp);
+    // FILE* fp = fopen("./delta.txt", "a");
+    // fprintf(fp, "%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", delta[0], delta[1], delta[2], delta[3], delta[4], delta[5]);
+    // fclose(fp);
 
     return true;
 }
@@ -36,14 +36,12 @@ double VisualCost::sum_t_ = 0;
 Matrix3d VisualCost::Rbc;
 Vector3d VisualCost::tbc;
 
-VisualCost::VisualCost(int i, int j, const Vector3f& ref_pt, const Vector3f& cur_pt) {
+VisualCost::VisualCost(int i, int j, const Vector3d& ref_pt, const Vector3d& cur_pt) {
     i_ = i;
     j_ = j;
-    ref_pt_ = ref_pt.cast<double>();
-    cur_pt_ = cur_pt.cast<double>();
-
-    FILE* fp = fopen("./visual_factor.txt", "w");
-    fclose(fp);
+    ref_pt_ = ref_pt;
+    cur_pt_ = cur_pt;
+;
 }
 
 bool VisualCost::Evaluate(double const* const* parameters, double* residuals, double** jacobian) const {
@@ -70,9 +68,9 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
     res = pcj - cur_pt_.head<2>();
     res = sqrt_info_*res;
 
-    FILE* fp = fopen("./visual_factor.txt", "a");
-    fprintf(fp, "%d->%d  %lf, %lf, %lf, %lf, %lf, %lf\n", i_, j_, res(0), res(1), ref_pt_(0), ref_pt_(1), cur_pt_(0), cur_pt_(1));
-    fclose(fp);
+    // FILE* fp = fopen("./visual_factor.txt", "a");
+    // fprintf(fp, "%d->%d  %lf, %lf, %lf, %lf, %lf, %lf\n", i_, j_, res(0), res(1), ref_pt_(0), ref_pt_(1), cur_pt_(0), cur_pt_(1));
+    // fclose(fp);
 
     if (jacobian) {
         Matrix<double, 2, 3, RowMajor> reduce;
@@ -87,7 +85,7 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
 
             Matrix<double, 3, 6, RowMajor> temp_J;
             temp_J.leftCols<3>().setIdentity();
-            temp_J.rightCols<3>() = -Rwbi*symmetricMatrix<double>(Pbi);
+            temp_J.rightCols<3>() = -Rwbi*symmetricMatrix(Pbi);
 
             Jaco.leftCols<6>() = reduce*Rbc.transpose()*Rwbj.transpose()*temp_J;
             Jaco.rightCols<1>().setZero();
@@ -102,7 +100,7 @@ bool VisualCost::Evaluate(double const* const* parameters, double* residuals, do
 
             Matrix<double, 3, 6, RowMajor> temp_J;
             temp_J.leftCols<3>()  = -Rwbj.transpose();
-            temp_J.rightCols<3>() = symmetricMatrix<double>(Pbj);
+            temp_J.rightCols<3>() = symmetricMatrix(Pbj);
 
             Jaco.leftCols<6>() = reduce*Rbc.transpose()*temp_J;
             Jaco.rightCols<1>().setZero();

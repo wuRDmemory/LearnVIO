@@ -39,13 +39,13 @@ public:
                 float cx = nd["cx"];
                 float cy = nd["cy"];
 
-                float d0 = nd["d0"];
-                float d1 = nd["d1"];
-                float d2 = nd["d2"];
-                float d3 = nd["d3"];
-                float d4 = nd["d4"];
+                float k1 = nd["k1"];
+                float k2 = nd["k2"];
+                float p1 = nd["p1"];
+                float p2 = nd["p2"];
+                float k3 = nd["k3"];
 
-                return new PinholeCamera(width, height, camera_name, fx, fy, cx, cy, d0, d1, d2, d3, d4);
+                return new PinholeCamera(width, height, camera_name, fx, fy, cx, cy, k1, k2, p1, p2, k3);
             }
             else {
                 return NULL;

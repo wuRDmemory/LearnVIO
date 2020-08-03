@@ -45,6 +45,6 @@ private:
 
 
 public:
-    VisualCost(int i, int j, const Vector3f& ref_pt, const Vector3f& cur_pt);
+    VisualCost(int i, int j, const Vector3d& ref_pt, const Vector3d& cur_pt);
     virtual bool Evaluate(double const* const* parameters, double* residuals, double** jacobian) const;
 };

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(learn_vio)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-set(CMAKE_BUILD_TYPE DEBUG)
+set(CMAKE_BUILD_TYPE RELEASE)
 add_compile_options(-std=c++11)
 
 ## Find catkin macros and libraries
@@ -34,6 +34,7 @@ include_directories(
 
 # OPENCV
 find_package(OpenCV REQUIRED)
+message("-- Found OpenCV Version: ${OpenCV_VERSION}")
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 # EIGEN
@@ -41,8 +42,13 @@ include_directories(/usr/include/eigen3/)
 
 # ceres
 find_package(Ceres REQUIRED)
-message("-- Ceres Version: ${CERES_VERSION}")
+message("-- Found Ceres Version: ${CERES_VERSION}")
 include_directories(${CERES_INCLUDE_DIRS})
+
+# protobuf
+find_package(Protobuf REQUIRED)
+message("-- Found Protobuf version: ${PROTOBUF_VERSION}")
+include_directories(${PROTOBUF_INCLUDE_DIRS})
 
 # header
 include_directories(${PROJECT_SOURCE_DIR}/include/)
@@ -50,6 +56,7 @@ include_directories(${PROJECT_SOURCE_DIR}/include/inertial/)
 include_directories(${PROJECT_SOURCE_DIR}/include/visual/)
 include_directories(${PROJECT_SOURCE_DIR}/include/util/)
 include_directories(${PROJECT_SOURCE_DIR}/include/initial/)
+include_directories(${PROJECT_SOURCE_DIR}/protobuf/c++/)
 include_directories(${PROJECT_SOURCE_DIR}/camera/)
 
 # source
@@ -58,9 +65,8 @@ file(GLOB INR_FILES ${PROJECT_SOURCE_DIR}/src/inertial/*.cc)
 file(GLOB VIS_FILES ${PROJECT_SOURCE_DIR}/src/visual/*.cc)
 file(GLOB UTL_FILES ${PROJECT_SOURCE_DIR}/src/util/*.cc)
 file(GLOB INI_FILES ${PROJECT_SOURCE_DIR}/src/initial/*.cc)
+file(GLOB PRT_FILES ${PROJECT_SOURCE_DIR}/protobuf/c++/*.cc)
 file(GLOB CMR_FILES ${PROJECT_SOURCE_DIR}/camera/*.cc)
-
-message(${VIS_FILES})
 
 set(ALL_SOURCE 
     ${SRC_FILES} 
@@ -68,12 +74,14 @@ set(ALL_SOURCE
     ${VIS_FILES}
     ${UTL_FILES}
     ${INI_FILES}
-    ${CMR_FILES})
+    ${CMR_FILES}
+    ${PRT_FILES})
 
 list(APPEND ALL_LIBS
     ${catkin_LIBRARIES} 
     ${OpenCV_LIBS} 
-    ${CERES_LIBRARIES}   
+    ${CERES_LIBRARIES}
+    ${PROTOBUF_LIBRARIES}   
 )
 
 # compile options

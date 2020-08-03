@@ -21,6 +21,7 @@
 #include "include/util/config.h"
 #include "include/util/tick.h"
 #include "include/estimator.h"
+#include "include/visualizor.h"
 
 using namespace std;
 using namespace Eigen;
@@ -42,8 +43,6 @@ static mutex estimate_lock;
 
 static queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 static queue<sensor_msgs::ImuConstPtr>        imu_buf;
-
-static ros::Publisher pose_publisher;
 
 template <typename T> 
 T getParameter(ros::NodeHandle& n, string name) {
@@ -97,8 +96,7 @@ void imuCallBack(const sensor_msgs::ImuConstPtr &imu_msg) {
     }
 }
 
-
-vector<Data_Type> getMeasures() {    
+vector<Data_Type> getMeasures() {
     vector<Data_Type> ret;
     while (true) {
         if (imu_buf.empty() || feature_buf.empty()) {
@@ -160,81 +158,83 @@ void process() {
         lock.unlock();
 
         {   // 
-        unique_lock<mutex> lock1(estimate_lock);
-        for (Data_Type& measure : measures) {
-            auto feature = measure.second;
-            auto imus    = measure.first;
+            unique_lock<mutex> lock1(estimate_lock);
+            for (Data_Type& measure : measures) {
+                auto feature = measure.second;
+                auto imus    = measure.first;
 
-            float feature_time = feature->header.stamp.toSec();            
-            float ax, ay, az, gx, gy, gz;
-            float dt;
+                double feature_time = feature->header.stamp.toSec();            
+                double ax, ay, az, gx, gy, gz;
+                double dt;
 
-            for (auto& imu : imus) {
-                double t = imu->header.stamp.toSec();
-                if (t <= feature_time) { 
-                    if (current_time < 0)
+                for (auto& imu : imus) {
+                    double t = imu->header.stamp.toSec();
+                    if (t <= feature_time) { 
+                        if (current_time < 0)
+                            current_time = t;
+
+                        double dt = t - current_time;
+                        ROS_ASSERT(dt >= 0);
                         current_time = t;
+                        ax = imu->linear_acceleration.x;
+                        ay = imu->linear_acceleration.y;
+                        az = imu->linear_acceleration.z;
+                        gx = imu->angular_velocity.x;
+                        gy = imu->angular_velocity.y;
+                        gz = imu->angular_velocity.z;
+                        estimator->processImu(dt, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                        //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
 
-                    double dt = t - current_time;
-                    ROS_ASSERT(dt >= 0);
-                    current_time = t;
-                    ax = imu->linear_acceleration.x;
-                    ay = imu->linear_acceleration.y;
-                    az = imu->linear_acceleration.z;
-                    gx = imu->angular_velocity.x;
-                    gy = imu->angular_velocity.y;
-                    gz = imu->angular_velocity.z;
-                    estimator->processImu(dt, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
-                    //printf("imu: dt:%f a: %f %f %f w: %f %f %f\n",dt, dx, dy, dz, rx, ry, rz);
+                    }
+                    else {
+                        // interpolation
+                        // for last imu data
+                        double dt_1 = feature_time - current_time;
+                        double dt_2 = t - feature_time;
+                        current_time = feature_time;
 
+                        ROS_ASSERT(dt_1 >= 0);
+                        ROS_ASSERT(dt_2 >= 0);
+                        ROS_ASSERT(dt_1 + dt_2 > 0);
+
+                        double w1 = dt_2 / (dt_1 + dt_2);
+                        double w2 = dt_1 / (dt_1 + dt_2);
+                        ax = w1 * ax + w2 * imu->linear_acceleration.x;
+                        ay = w1 * ay + w2 * imu->linear_acceleration.y;
+                        az = w1 * az + w2 * imu->linear_acceleration.z;
+                        gx = w1 * gx + w2 * imu->angular_velocity.x;
+                        gy = w1 * gy + w2 * imu->angular_velocity.y;
+                        gz = w1 * gz + w2 * imu->angular_velocity.z;
+                        estimator->processImu(dt_1, Vector3d(ax, ay, az), Vector3d(gx, gy, gz));
+                    }
                 }
-                else {
-                    // interpolation
-                    // for last imu data
-                    double dt_1 = feature_time - current_time;
-                    double dt_2 = t - feature_time;
-                    current_time = feature_time;
 
-                    ROS_ASSERT(dt_1 >= 0);
-                    ROS_ASSERT(dt_2 >= 0);
-                    ROS_ASSERT(dt_1 + dt_2 > 0);
+                Tick tick;
+                Image_Type image;
+                for (unsigned int i = 0; i < feature->points.size(); i++) {
+                    int feature_id = feature->channels[0].values[i];
+                    
+                    vector<double> data(7, 0);
+                    data[0] = feature->points[i].x;
+                    data[1] = feature->points[i].y;
+                    data[2] = feature->points[i].z;
+                    data[3] = feature->channels[1].values[i];
+                    data[4] = feature->channels[2].values[i];
+                    data[5] = feature->channels[3].values[i];
+                    data[6] = feature->channels[4].values[i];
+                    ROS_ASSERT(data[2] == 1);
 
-                    double w1 = dt_2 / (dt_1 + dt_2);
-                    double w2 = dt_1 / (dt_1 + dt_2);
-                    ax = w1 * ax + w2 * imu->linear_acceleration.x;
-                    ay = w1 * ay + w2 * imu->linear_acceleration.y;
-                    az = w1 * az + w2 * imu->linear_acceleration.z;
-                    gx = w1 * gx + w2 * imu->angular_velocity.x;
-                    gy = w1 * gy + w2 * imu->angular_velocity.y;
-                    gz = w1 * gz + w2 * imu->angular_velocity.z;
-                    estimator->processImu(dt_1, Vector3f(ax, ay, az), Vector3f(gx, gy, gz));
+                    image.insert(make_pair(feature_id, make_pair(0, data)));
                 }
+
+                estimator->processImage(feature->header.stamp.toSec(), image);
+
+                ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
+
+                pubOdometry(*estimator, feature->header);
+                pubKeyFrame(*estimator, feature->header);
             }
-
-            Tick tick;
-            Image_Type image;
-            for (unsigned int i = 0; i < feature->points.size(); i++) {
-                int feature_id = feature->channels[0].values[i];
-                
-                vector<double> data(7, 0);
-                data[0] = feature->points[i].x;
-                data[1] = feature->points[i].y;
-                data[2] = feature->points[i].z;
-                data[3] = feature->channels[1].values[i];
-                data[4] = feature->channels[2].values[i];
-                data[5] = feature->channels[3].values[i];
-                data[6] = feature->channels[4].values[i];
-                ROS_ASSERT(data[2] == 1);
-
-                image.insert(make_pair(feature_id, make_pair(0, data)));
-            }
-
-            estimator->processImage(feature->header.stamp.toSec(), image);
-
-            ROS_DEBUG("[process] estimator eclipse : %lf", tick.delta_time());
         }
-        }
-
 
     }
 }
@@ -257,6 +257,8 @@ int main(int argc, char** argv) {
     ros::Subscriber point_cloud_suber = n.subscribe("/feature_tracker/feature", 1000, pointCloudCallBack);
     ros::Subscriber imu_suber         = n.subscribe(IMU_TOPIC, 2000, imuCallBack, ros::TransportHints().tcpNoDelay());
     
+    registerPub(n);
+
     thread main_process{process};
     ros::spin();
     return 1;

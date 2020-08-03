@@ -42,11 +42,11 @@ int relativeRT(map<int, Feature*>& all_ftr, Matrix3d& Rcr, Vector3d& tcr, int wi
         double parallax_sum = 0;
         int    parallax_num = 0;
         for (int id : ftr_ids) {
-            Vector3f p1 = all_ftr[id]->getF(ref_frame_id);
-            Vector3f p2 = all_ftr[id]->getF(cur_frame_id);
+            Vector3d p1 = all_ftr[id]->getF(ref_frame_id);
+            Vector3d p2 = all_ftr[id]->getF(cur_frame_id);
 
-            Vector2f ip1 = all_ftr[id]->getUV(ref_frame_id);
-            Vector2f ip2 = all_ftr[id]->getUV(cur_frame_id);
+            Vector2d ip1 = all_ftr[id]->getUV(ref_frame_id);
+            Vector2d ip2 = all_ftr[id]->getUV(cur_frame_id);
 
             parallax_sum += (p1-p2).norm();
             parallax_num += 1;
@@ -58,25 +58,25 @@ int relativeRT(map<int, Feature*>& all_ftr, Matrix3d& Rcr, Vector3d& tcr, int wi
             cur_im_pts.emplace_back(ip2.x(), ip2.y());
         }
 
-        {   // test match
-            cv::Mat im(ROW, COL, CV_8UC3, cv::Scalar::all(0));
+        // {   // test match
+        //     cv::Mat im(ROW, COL, CV_8UC3, cv::Scalar::all(0));
 
-            for (int i = 0; i < ref_im_pts.size(); i++) {
-                int r = cv::theRNG().uniform(0, 255);
-                int g = cv::theRNG().uniform(0, 255);
-                int b = cv::theRNG().uniform(0, 255);
+        //     for (int i = 0; i < ref_im_pts.size(); i++) {
+        //         int r = cv::theRNG().uniform(0, 255);
+        //         int g = cv::theRNG().uniform(0, 255);
+        //         int b = cv::theRNG().uniform(0, 255);
 
-                cv::circle(im, ref_im_pts[i], 2, cv::Scalar(r, g, b), 1);
-                cv::circle(im, cur_im_pts[i], 2, cv::Scalar(r, g, b), 1);
+        //         cv::circle(im, ref_im_pts[i], 2, cv::Scalar(r, g, b), 1);
+        //         cv::circle(im, cur_im_pts[i], 2, cv::Scalar(r, g, b), 1);
 
-                cv::line(im, ref_im_pts[i], cur_im_pts[i], cv::Scalar(r, g, b), 1);
+        //         cv::line(im, ref_im_pts[i], cur_im_pts[i], cv::Scalar(r, g, b), 1);
 
-                cv::putText(im, to_string(ftr_ids[i]), cur_im_pts[i], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0));
-            }
+        //         cv::putText(im, to_string(ftr_ids[i]), cur_im_pts[i], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0));
+        //     }
 
-            cv::imwrite("/home/ubuntu/catkin_ws/src/learn_vio/images/RT.png", im);
+        //     cv::imwrite("/home/ubuntu/catkin_ws/src/learn_vio/images/RT.png", im);
             
-        }
+        // }
 
         float parallax = FOCAL_LENGTH*parallax_sum/(float)parallax_num;
         LOGD("[relative RT] [%d, %d] parallax is %f|%d", ref_frame_id, cur_frame_id, parallax, parallax_num);
@@ -536,8 +536,8 @@ int visualInertialAlign(vector<FrameStruct*>& frames, Matrix3d Rbc, Vector3d tbc
             frame->bias_g_ = bias_g;
             continue;
         }
-        frame->preintegrate_->gyro_bias_ = bias_g.cast<float>();
-        frame->preintegrate_->reintegrate(Vector3f(0, 0, 0), bias_g.cast<float>());
+        frame->preintegrate_->gyro_bias_ = bias_g;
+        frame->preintegrate_->reintegrate(Vector3d(0, 0, 0), bias_g);
         frame->bias_g_ = bias_g;
     }
 

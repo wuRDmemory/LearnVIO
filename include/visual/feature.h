@@ -22,17 +22,17 @@ public:
     int id_;
     int ref_frame_id_;
 
-    float inv_d_;
+    double inv_d_;
     Vector3d pt3d_;
 
-    vector<Vector3f>  vis_fs_;
-    vector<Vector2f>  vis_uv_;
+    vector<Vector3d>  vis_fs_;
+    vector<Vector2d>  vis_uv_;
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
    
     Feature() = delete;
-    Feature(int id, int ref_frame_id, Vector3f& f, Vector2f& uv) {
+    Feature(int id, int ref_frame_id, Vector3d& f, Vector2d& uv) {
         id_ = id;
         ref_frame_id_ = ref_frame_id;
         vis_fs_.push_back(f);
@@ -50,13 +50,13 @@ public:
         return ref_frame_id_;   
     }
 
-    Vector3f getF(int frame_id) const {
+    Vector3d getF(int frame_id) const {
         int d = frame_id - ref_frame_id_;
         assert(d >= 0 && d < vis_fs_.size() || "feature manager error!!!");
         return vis_fs_[d];
     }
     
-    Vector2f getUV(int frame_id) const {
+    Vector2d getUV(int frame_id) const {
         int d = frame_id - ref_frame_id_;
         return vis_uv_[d];
     }
@@ -68,7 +68,7 @@ public:
         return (frame_id - ref_frame_id_) < (int)vis_fs_.size();
     }
 
-    bool addFrame(const Vector3f& f, const Vector2f& uv) {
+    bool addFrame(const Vector3d& f, const Vector2d& uv) {
         vis_fs_.push_back(f);
         vis_uv_.push_back(uv);
 
@@ -78,11 +78,11 @@ public:
     bool removeFrame(int frame_id) {
         int delta = frame_id - ref_frame_id_;
 
-        if (delta < vis_fs_.size()) {
+        if (   delta < 0
+            || delta >= vis_fs_.size()) {
             return false;
         }
 
-        // TODO: how to remove it
         vis_fs_.erase(vis_fs_.begin()+delta);
         vis_uv_.erase(vis_uv_.begin()+delta);
         return true;
@@ -101,22 +101,28 @@ public:
 
     bool clear();
 
-    bool removeFrame(int frame_id);
+    bool removeNewFrame(int newest_frame_id);
 
-    bool removeOldestFrame(const Quaternionf &Rcm, const Vector3f &tcm);
+    bool removeOldestFrame();
+
+    bool removeOldestFrame(const Matrix3d &Rcm, const Vector3d &tcm);
 
     bool addNewFeatures(const Image_Type& image_data, int frame_id);
 
     // triangle all features
-    int  trianglesInitial(Matrix3f Rcw[], Vector3f tcw[]);
+    int  trianglesInitial(Matrix3d Rcw[], Vector3d tcw[]);
 
     // triangle new features
-    int  trianglesNew(Matrix3f Rcw[], Vector3f tcw[]);
+    int  trianglesNew(Matrix3d Rcw[], Vector3d tcw[]);
 
     int size() const { return all_ftr_.size(); }
 
+    void toProto(string save_path) const;
+
+    void fromProto(string save_path);
+
 private:
-    float computeParallax(Feature* ftr, int frame_id);
+    double computeParallax(Feature* ftr, int frame_id);
 };
 
 typedef FeatureManager* FeatureManagerPtr;

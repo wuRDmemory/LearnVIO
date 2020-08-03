@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package PbFeature;
+
+import "math.proto";
+
+message Feature {
+    int32 id = 1;
+    int32 ref_frame_id = 2;
+    double inv_depth = 3;
+    PbMath.vector3 pt3d = 4;
+
+    repeated PbMath.vector3 vis_fs = 5;
+    repeated PbMath.vector2 vis_uv = 6;
+}
+
+message FeatureManager {
+    map<int32, Feature> all_ftr = 1;
+}
+
+

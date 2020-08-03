@@ -9,6 +9,8 @@
 #include "../include/util/log.h"
 #include "../include/inertial/preintegrate.h"
 
+#include "../include/util/config.h"
+
 using namespace std;
 using namespace cv;
 using namespace Eigen;
@@ -28,8 +30,13 @@ vector<vector<double>> imu_datas = {
 };
 
 int main(int argc, char** argv) {
-    Vector3f accl, gyro;
-    Vector3f accl_bias, gyro_bias;
+    ACCL_N      = 0.08;
+    GYRO_N      = 0.004;
+    ACCL_BIAS_N = 0.00004;
+    GYRO_BIAS_N = 0.000002;
+
+    Vector3d accl, gyro;
+    Vector3d accl_bias, gyro_bias;
 
     accl.setZero();
     gyro.setZero();
@@ -40,29 +47,34 @@ int main(int argc, char** argv) {
     PreIntegrate* integ = new PreIntegrate(accl, gyro, accl_bias, gyro_bias);
 
     for (vector<double> &imu : imu_datas) {
-        accl << imu[0], imu[1], imu[2];
-        gyro << imu[3], imu[4], imu[5];
+        gyro << imu[0], imu[1], imu[2];
+        accl << imu[3], imu[4], imu[5];
 
         integ->push_back(0.005, accl, gyro);
     }
+
+    cout << integ->Jacobian_   << endl << endl;
+    cout << integ->covariance_ << endl << endl;
 
     cout << "before gyro bias" << endl;
     cout << "p: " << integ->delta_p_.transpose() << endl;
     cout << "q: " << integ->delta_q_.coeffs().transpose() << endl;
     cout << "v: " << integ->delta_v_.transpose() << endl;
 
-    Quaternionf delta_q = integ->delta_q_;
-    Vector3f    delta_p = integ->delta_p_;
-    Vector3f    delta_v = integ->delta_v_;
+    Quaterniond delta_q = integ->delta_q_;
+    Vector3d    delta_p = integ->delta_p_;
+    Vector3d    delta_v = integ->delta_v_;
 
-    Matrix3f Jqbw = integ->Jacobian_.block<3, 3>(J_OR, J_OBW).cast<float>();
-    Matrix3f Jpba = integ->Jacobian_.block<3, 3>(J_OP, J_OBA).cast<float>();
-    Matrix3f Jpbw = integ->Jacobian_.block<3, 3>(J_OP, J_OBW).cast<float>();
-    Matrix3f Jvba = integ->Jacobian_.block<3, 3>(J_OV, J_OBA).cast<float>();
-    Matrix3f Jvbw = integ->Jacobian_.block<3, 3>(J_OV, J_OBW).cast<float>();
+    Matrix3d Jqbw = integ->Jacobian_.block<3, 3>(J_OR, J_OBW);
+    Matrix3d Jpba = integ->Jacobian_.block<3, 3>(J_OP, J_OBA);
+    Matrix3d Jpbw = integ->Jacobian_.block<3, 3>(J_OP, J_OBW);
+    Matrix3d Jvba = integ->Jacobian_.block<3, 3>(J_OV, J_OBA);
+    Matrix3d Jvbw = integ->Jacobian_.block<3, 3>(J_OV, J_OBW);
 
-    Vector3f new_gyro_bias(-0.00193261, 0.0482494, 0.0797451);
-    Vector3f new_accl_bias(-0.025266,   0.136696,  0.075593);
+    // -------------------------------------------------------------------
+
+    Vector3d new_gyro_bias(-0.00193261, 0.0482494, 0.0797451);
+    Vector3d new_accl_bias(-0.025266  , 0.136696 , 0.075593 );
 
     integ->reintegrate(new_accl_bias, new_gyro_bias);
 
@@ -71,10 +83,11 @@ int main(int argc, char** argv) {
     cout << "q: " << integ->delta_q_.coeffs().transpose() << endl;
     cout << "v: " << integ->delta_v_.transpose() << endl;
 
+    // -------------------------------------------------------------------
 
-    Quaternionf q = delta_q*vec2quat<float>(Jpbw*new_gyro_bias);
-    Vector3f    p = delta_p + Jpba*new_accl_bias + Jpbw*new_gyro_bias;
-    Vector3f    v = delta_v + Jvba*new_accl_bias + Jvbw*new_gyro_bias;
+    Quaterniond q = delta_q * vec2quat<double>(Jqbw*new_gyro_bias);
+    Vector3d    p = delta_p + Jpba*new_accl_bias + Jpbw*new_gyro_bias;
+    Vector3d    v = delta_v + Jvba*new_accl_bias + Jvbw*new_gyro_bias;
     q.normalize();
 
     cout << "after gyro bias pre" << endl;

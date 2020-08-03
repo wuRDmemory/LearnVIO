@@ -27,7 +27,7 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
 
         vector<uchar> status;
         vector<float> error;
-        cv::calcOpticalFlowPyrLK(prev_image_, curr_image_, prev_pts_, curr_pts_, status, error);
+        cv::calcOpticalFlowPyrLK(prev_image_, curr_image_, prev_pts_, curr_pts_, status, error, cv::Size(21, 21), 3);
 
         int track_num = 0;
         for (int i = 0; i < (int)status.size(); i++) {

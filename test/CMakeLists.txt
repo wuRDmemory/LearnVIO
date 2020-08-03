@@ -30,3 +30,6 @@ target_link_libraries(test_preintegrate ${OpenCV_LIBS})
 
 add_executable(test_visual_factor test_visual_factor.cc ${VIS_SRC} ${UTL_SRC})
 target_link_libraries(test_visual_factor ${OpenCV_LIBS} ${CERES_LIBRARIES})
+
+add_executable(test_quaternion test_quaternion.cc ${INR_SRC} ${UTL_SRC})
+target_link_libraries(test_quaternion ${OpenCV_LIBS})
