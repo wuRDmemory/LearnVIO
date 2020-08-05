@@ -233,6 +233,7 @@ void process() {
 
                 pubOdometry(*estimator, feature->header);
                 pubKeyFrame(*estimator, feature->header);
+                pubLandmark(*estimator, feature->header);
             }
         }
 

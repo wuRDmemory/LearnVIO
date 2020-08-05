@@ -3,7 +3,7 @@
 
 ros::Publisher pub_odometry;
 ros::Publisher pub_path, pub_pose;
-// ros::Publisher pub_cloud, pub_map;
+ros::Publisher pub_cloud, pub_map;
 ros::Publisher pub_key_poses;
 // ros::Publisher pub_ref_pose, pub_cur_pose;
 // ros::Publisher pub_key;
@@ -14,10 +14,11 @@ void registerPub(ros::NodeHandle &n)
 {
     pub_path     = n.advertise<nav_msgs::Path>("path", 1000);
     pub_odometry = n.advertise<nav_msgs::Odometry>("odometry", 1000);
+    pub_cloud    = n.advertise<sensor_msgs::PointCloud>("point_cloud", 1000);
     pub_key_poses = n.advertise<visualization_msgs::Marker>("key_frames", 1000);
 }
 
-void pubOdometry(const Estimator &estimator, const std_msgs::Header &header) 
+void pubOdometry(const Estimator& estimator, const std_msgs::Header& header) 
 {
     if (estimator.initial_)
     {
@@ -87,4 +88,32 @@ void pubKeyFrame(const Estimator& estimator, const std_msgs::Header& header) {
         key_poses.points.push_back(pose_marker);
     }
     pub_key_poses.publish(key_poses);
+}
+
+void pubLandmark(const Estimator& estimator, const std_msgs::Header& header) {
+    sensor_msgs::PointCloud point_cloud;
+    point_cloud.header = header;
+
+    for (auto &id_ftr : estimator.feature_manager_.all_ftr_) {
+        int       id = id_ftr.first;
+        Feature* ftr = id_ftr.second;
+
+        if (   ftr->size() <= 2 
+            || ftr->ref_frame_id_ >= FEN_WINDOW_SIZE-2
+            || ftr->inv_d_ <= 0) {
+            continue;
+        }
+        
+        const int imu_i  = ftr->getRefFrameId();
+        Vector3d pts_i   = ftr->vis_fs_[0]/ftr->inv_d_;
+        // Pw = w_R_b*(b_R_c*Pc+b_t_c)+w_t_b
+        Vector3d w_pts_i = estimator.RS_[imu_i]*(Rics[0]*pts_i + tics[0]) + estimator.PS_[imu_i];
+
+        geometry_msgs::Point32 p;
+        p.x = w_pts_i(0);
+        p.y = w_pts_i(1);
+        p.z = w_pts_i(2);
+        point_cloud.points.push_back(p);
+    }
+    pub_cloud.publish(point_cloud);
 }

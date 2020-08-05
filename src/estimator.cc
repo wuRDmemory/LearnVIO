@@ -462,7 +462,7 @@ bool Estimator::slideWindow(bool margin_old) {
         timestamp_.pop_back();
 
         delete(preintegrates_[FEN_WINDOW_SIZE]);
-        preintegrates_[FEN_WINDOW_SIZE] = nullptr;
+        preintegrates_[FEN_WINDOW_SIZE] = new PreIntegrate(accl_0_, gyro_0_, BAS_[FEN_WINDOW_SIZE], BGS_[FEN_WINDOW_SIZE]);
 
         slideNewFrame();
     }
@@ -555,6 +555,9 @@ void Estimator::solveOptimize() {
 
     // add imu constraint
     for (int i = 1; i <= FEN_WINDOW_SIZE; i++) {
+        if (preintegrates_[i]->sum_dt_ > 10.0)
+            continue;
+        
         Inertial_Factor* iner_factor = new Inertial_Factor(i-1, i, preintegrates_[i]);
         problem.AddResidualBlock(iner_factor, NULL, 
             pose_params[i-1], motion_params[i-1], pose_params[i], motion_params[i]);
@@ -628,7 +631,7 @@ void Estimator::solveOptimize() {
     options.trust_region_strategy_type = ceres::DOGLEG;
     options.minimizer_progress_to_stdout = false;
     options.max_num_iterations         = 10;
-    options.max_solver_time_in_seconds = 1.0;
+    options.max_solver_time_in_seconds = 0.2;
 
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
@@ -675,36 +678,48 @@ void Estimator::solveOptimize() {
 
 void Estimator::double2vector() {
     // correct yaw 
-    Matrix3d Rw0w;  // w0_R_w
-    {   // this place correct the world corrdination,
-        // not  b0 corrdination
-        Matrix3d Rw0b    = RS_[0].toRotationMatrix();
-        Quaterniond Qwb  = Quaterniond(pose_params[0][6], 
-                                     pose_params[0][3], 
-                                     pose_params[0][4], 
-                                     pose_params[0][5]);
-        Matrix3d Rwb     = Qwb.toRotationMatrix();
+    // Matrix3d Rw0w;  // w0_R_w
+    // {   // this place correct the world corrdination,
+    //     // not  b0 corrdination
+    //     Matrix3d    Rw0b = RS_[0].toRotationMatrix();
+    //     Quaterniond Qwb  = Quaterniond(pose_params[0]+3);
+    //     Matrix3d    Rwb  = Qwb.toRotationMatrix();
 
-        // attitude of w00 in b coordination
-        // attitude of w0  in b coordination
-        Vector3d ypr0 = Rnb2ypr<double>(Rw0b.transpose());
-        Vector3d ypr  = Rnb2ypr<double>(Rwb.transpose() );
+    //     // attitude of w0 in b coordination
+    //     // attitude of w  in b coordination
+    //     Vector3d ypr0 = Rnb2ypr<double>(Rw0b.transpose());
+    //     Vector3d ypr  = Rnb2ypr<double>(Rwb.transpose() );
 
-        if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
-            Rw0w = Rw0b*Rwb.transpose();
-        }
-        else {
-            // only correct 
-            double yw0 = ypr0.x();
-            double yw  = ypr.x();
+    //     if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
+    //         Rw0w = Rw0b*Rwb.transpose();
+    //     }
+    //     else {
+    //         // only correct 
+    //         double yw0 = ypr0.x();
+    //         double yw  = ypr.x();
 
-            // rotate all w0 to w00
-            double diff_w = yw - yw0; // diff between w and w0 
-            Rw0w = ypr2Rnb(Vector3d(diff_w, 0, 0)); // w0_R_w
-        }
+    //         // rotate all w0 to w00
+    //         double diff_w = yw - yw0;               // diff between w and w0 
+    //         LOGE("[d2V] diff yaw : %lf", diff_w);
+    //         Rw0w = ypr2Rnb(Vector3d(-diff_w, 0, 0)); // w0_R_w
+    //     }
+    // }
+
+    // Vector3d Pw0b = PS_[0];
+
+    Vector3d origin_R0 = Rnb2ypr(RS_[0].toRotationMatrix());
+    Vector3d Pw0b      = PS_[0];
+
+    Vector3d origin_R00 = Rnb2ypr(Quaterniond(pose_params[0]+3).toRotationMatrix());
+    double y_diff = origin_R0.x() - origin_R00.x(); // 30 - 60
+    LOGE("[D2V] yaw diff : %lf", y_diff);
+    //TODO
+    Matrix3d Rw0w = ypr2Rnb(Vector3d(y_diff, 0, 0));
+    if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
+    {
+        // w00_R_b * b_R_w0
+        Rw0w = RS_[0] * Quaterniond(pose_params[0]+3).toRotationMatrix().transpose();
     }
-
-    Vector3d Pw0b = PS_[0];
 
     int  i = 0;
     for (i = 0; i <= FEN_WINDOW_SIZE; i++) {
@@ -717,7 +732,7 @@ void Estimator::double2vector() {
         // Rw0b
         Quaterniond Rwb(pose_params[i][6], pose_params[i][3], 
                         pose_params[i][4], pose_params[i][5]);
-        RS_[i] = (Quaterniond(Rw0w)*Rwb).normalized();
+        RS_[i] = Quaterniond(Rw0w)*Rwb.normalized();
 
         // Vw0b
         Vector3d Vwb(motion_params[i][0], motion_params[i][1], motion_params[i][2]);

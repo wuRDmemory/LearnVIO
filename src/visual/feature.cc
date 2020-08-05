@@ -30,7 +30,7 @@ bool FeatureManager::removeNewFrame(int newest_frame_id) {
 
         Feature* ftr = iter->second;
         if (ftr->ref_frame_id_ == newest_frame_id) {
-            ftr->ref_frame_id_--;
+            ftr->ref_frame_id_ --;
             continue;
         }
 
@@ -39,7 +39,7 @@ bool FeatureManager::removeNewFrame(int newest_frame_id) {
             ftr->removeFrame(newest_frame_id-1);
         }
 
-        if (ftr->size() <= 1) {
+        if (ftr->size() == 0) {
             remove_cnt++;
             all_ftr_.erase(iter);
         }

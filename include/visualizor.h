@@ -8,6 +8,7 @@
 #include <std_msgs/Bool.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud.h>
+#include <sensor_msgs/PointCloud2.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
 #include <nav_msgs/Path.h>
@@ -38,3 +39,4 @@ extern int IMAGE_ROW, IMAGE_COL;
 void registerPub(ros::NodeHandle &n);
 void pubOdometry(const Estimator &estimator, const std_msgs::Header &header);
 void pubKeyFrame(const Estimator& estimator, const std_msgs::Header& header);
+void pubLandmark(const Estimator& estimator, const std_msgs::Header& header);

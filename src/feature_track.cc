@@ -84,8 +84,8 @@ void FeatureTrack::readImage(const cv::Mat& image, double timestamp) {
                 cv::putText(image, to_string(ids_[i]), curr_pts_[i], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0));
             }
 
-            string name = "/home/ubuntu/catkin_ws/src/learn_vio/images/image"+ to_string(image_id++)+".png";
-            cv::imwrite(name.c_str(), image);
+            // string name = "/home/ubuntu/catkin_ws/src/learn_vio/images/image"+ to_string(image_id++)+".png";
+            // cv::imwrite(name.c_str(), image);
         }
     } 
     else {
