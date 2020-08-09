@@ -214,6 +214,59 @@ $$
 
 &nbsp;
 
+---
+
+## VINS对yaw轴零空间的校正
+
+VINS-Mono并没有像DSO那样显式的（在优化问题中）考虑零空间对整个优化问题的影响，但是对于yaw轴，VINS-Mono在优化前后是做了一些补偿的，原理也很简单，对于滑动窗口中的最老的关键帧，优化前后的yaw轴是不能改变的，因为在局部的优化问题上来说，最老的关键帧是一个基准，因此基准是不能改变的，否则整个局部优化问题的能观性得不到保证。
+
+那这部分的公式也比较简单，其实用下图能表示的很好：
+
+<img src="pictures/VIO6.png" width=600>
+
+图中：
+
+- $W0$表示原先的世界坐标系，$W$表示优化后的世界坐标系，$b$表示机体的yaw轴方向；
+- $\theta_1$表示$b$系在$W0$坐标系下面的yaw角度，$\theta_2$表示$b$系在$W$坐标系下的yaw角度，$\theta_d$表示$W$系在$W0$系下的yaw角度；
+- 图中角度箭头的方向表示旋转的变换关系；
+
+这里需要说的一点是这个过程其实是在校正w坐标系，即认为优化之后是w坐标系发生了变化，之所以校正w坐标系是为了保证前后的w坐标系是一致的。
+
+于是很容易的看到一个关系就是$\theta_d=-(\theta_2-\theta_1)=\theta_1-\theta_2$，代码基本就是这个样子做的，只不过作者对变量的命名确实有些让我难理解，这里笔者稍微进行了修改，如下：
+
+```c++
+// this place correct the world corrdination,
+// not  b coordination
+Matrix3d    Rw0b = RS_[0].toRotationMatrix();
+Quaterniond Qwb  = Quaterniond(pose_params[0]+3);
+Matrix3d    Rwb  = Qwb.toRotationMatrix();
+
+// attitude of b in w0 coordination
+// attitude of b in w  coordination
+Vector3d ypr0 = Rnb2ypr<double>(Rw0b);
+Vector3d ypr  = Rnb2ypr<double>(Rwb);
+
+if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
+    Rw0w = Rw0b*Rwb.transpose();
+}
+else {
+    // only correct 
+    double yw0b = ypr0.x(); // b->w0
+    double ywb  = ypr.x();  // b->w
+
+    // yaw between w and w0
+    double yw0w = yw0b - ywb;  // w->w0
+    LOGE("[d2V] diff yaw : %lf", yw0w);   // 
+    Rw0w = ypr2Rnb(Vector3d(yw0w, 0, 0)); // w0_R_w
+}
+```
+
+
+
+
+
+&nbsp;
+
 ----
 
 ## 小结

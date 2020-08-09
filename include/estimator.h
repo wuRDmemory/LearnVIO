@@ -24,6 +24,7 @@ public:
     bool first_imu_;
     bool initial_;
     bool has_first_;  // has first frame
+    bool margin_old_;
     
     int frame_count_;
 

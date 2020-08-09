@@ -56,7 +56,7 @@ Visualization Manager:
       Marker Topic: /front_end/key_frames
       Name: Marker
       Namespaces:
-        {}
+        key_poses: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -151,7 +151,7 @@ Visualization Manager:
       Queue Size: 20
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.0500000007
+      Size (m): 0.00999999978
       Style: Flat Squares
       Topic: /front_end/point_cloud
       Unreliable: false
@@ -183,25 +183,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.80585241
+      Distance: 0.831857622
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.875788808
-        Y: 1.03176451
-        Z: 0.73103565
+        X: -1.79657531
+        Y: 1.3008728
+        Z: 0.934027076
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.400397927
+      Pitch: 0.430397928
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.47544503
+      Yaw: 2.73544216
     Saved: ~
 Window Geometry:
   Displays:
@@ -221,5 +221,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1032
-  X: 2681
-  Y: 101
+  X: 2424
+  Y: 81

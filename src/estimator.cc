@@ -8,7 +8,7 @@
 #include "../include/inertial/inertial_factor.h"
 
 Estimator::Estimator() : 
-    first_imu_(true), initial_(false), has_first_(true) {
+    first_imu_(true), initial_(false), has_first_(true), margin_old_(false) {
     temp_preintegrate_= nullptr;
     clearState();
 }
@@ -101,8 +101,8 @@ void Estimator::processImu(double dt, const Vector3d& accl, const Vector3d& gyro
 
 void Estimator::processImage(double timestamp, Image_Type& image) {
     LOGI("[estimate2] ========   new image come!!!  ==========");
-    bool margin_old = feature_manager_.addNewFeatures(image, frame_count_);
-    if (margin_old) {
+    margin_old_ = feature_manager_.addNewFeatures(image, frame_count_);
+    if (margin_old_) {
         LOGI("[estimate] Margin old state, build new key frame");
     } 
     else {
@@ -127,10 +127,10 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
                 // initial success 
                 initial_ = true;
                 solveOdometry();
-                slideWindow(margin_old);
+                slideWindow(margin_old_);
             } 
             else {
-                slideWindow(margin_old);
+                slideWindow(margin_old_);
             }
         }
         else {
@@ -140,7 +140,7 @@ void Estimator::processImage(double timestamp, Image_Type& image) {
     else {
         // initial has done
         solveOdometry();
-        slideWindow(margin_old);
+        slideWindow(margin_old_);
     }
 }
 
@@ -569,7 +569,6 @@ void Estimator::solveOptimize() {
     VisualCost::Rbc        = Rics[0];
     VisualCost::tbc        = tics[0];
 
-    // cv::Mat show(ROW, COL, CV_8UC3, cv::Scalar::all(0));
 
     int all_vis_edge = 0;
     int i            = 0;
@@ -591,9 +590,6 @@ void Estimator::solveOptimize() {
         Vector3d ref_pt = ftr->vis_fs_[0];
         Vector3d cur_pt = ref_pt;
 
-        // cv::Point p1(ref_pt(0)*FOCAL_LENGTH+COL/2, cur_pt(1)*FOCAL_LENGTH+ROW/2);
-        // cv::Point p2;
-
         for (int j = 1; j < ftr->size(); j++) {
             cur_pt = ftr->vis_fs_[j];
 
@@ -601,12 +597,6 @@ void Estimator::solveOptimize() {
                 LOGE("[estimate] Feature(%d) maybe bad: %d+%d>%d", id, ref_frame_id, j, FEN_WINDOW_SIZE);
                 assert(false);
             }
-
-            // p2 = cv::Point(cur_pt(0)*FOCAL_LENGTH+COL/2, cur_pt(1)*FOCAL_LENGTH+ROW/2);
-            // cv::circle(show, p1, 2,  cv::Scalar(0, 0, 255), 1);
-            // cv::circle(show, p2, 2,  cv::Scalar(0, 0, 255), 1);
-            // cv::line(  show, p1, p2, cv::Scalar(0, 255, 0), 1);
-            // p1 = p2;
 
             VisualCost* cost = new VisualCost(ref_frame_id, ref_frame_id+j, ref_pt, cur_pt);
             problem.AddResidualBlock(cost, loss, 
@@ -640,26 +630,30 @@ void Estimator::solveOptimize() {
     LOGD("[solve] Iterations  : %d", static_cast<int>(summary.iterations.size()));
     LOGD("[solve] solver costs: %lf", tic.delta_time());
 
-    // TODO: marginalize
-
-
     // double to vector
     double2vector();
 
-    {
-        FILE* fp = fopen("/home/ubuntu/catkin_ws/src/learn_vio/states.txt", "a");
-        fprintf(fp, "\n");
+    // TODO: marginalize
+    if (margin_old_) {
+        vector2double();
 
-        for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
-            Vector3d ypr = Rnb2ypr(Matrix3d(RS_[i]));
-            fprintf(fp, "%d\n%lf\t%lf\t%lf\t%lf\t%lf\t%lf \
-                           \n%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", i, 
-                    ypr(0), ypr(1), ypr(2), PS_[i][0], PS_[i][1], PS_[i][2],
-                    VS_[i][0], VS_[i][1], VS_[i][2], BAS_[i][0], BAS_[i][1], BAS_[i][2], BGS_[i][0], BGS_[i][1], BGS_[i][2]);
-        }
+        
+    }
 
-        fclose(fp);
-    } 
+    // {
+    //     FILE* fp = fopen("/home/ubuntu/catkin_ws/src/learn_vio/states.txt", "a");
+    //     fprintf(fp, "\n");
+
+    //     for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+    //         Vector3d ypr = Rnb2ypr(Matrix3d(RS_[i]));
+    //         fprintf(fp, "%d\n%lf\t%lf\t%lf\t%lf\t%lf\t%lf \
+    //                        \n%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\t%lf\n", i, 
+    //                 ypr(0), ypr(1), ypr(2), PS_[i][0], PS_[i][1], PS_[i][2],
+    //                 VS_[i][0], VS_[i][1], VS_[i][2], BAS_[i][0], BAS_[i][1], BAS_[i][2], BGS_[i][0], BGS_[i][1], BGS_[i][2]);
+    //     }
+
+    //     fclose(fp);
+    // } 
 
     // {
     //     FILE* fp = fopen("./motion.txt", "a");
@@ -678,48 +672,48 @@ void Estimator::solveOptimize() {
 
 void Estimator::double2vector() {
     // correct yaw 
-    // Matrix3d Rw0w;  // w0_R_w
-    // {   // this place correct the world corrdination,
-    //     // not  b0 corrdination
-    //     Matrix3d    Rw0b = RS_[0].toRotationMatrix();
-    //     Quaterniond Qwb  = Quaterniond(pose_params[0]+3);
-    //     Matrix3d    Rwb  = Qwb.toRotationMatrix();
+    Matrix3d Rw0w = Matrix3d::Identity();  // w0_R_w
+    Vector3d Pw0b = PS_[0];
+    {   // this place correct the world corrdination,
+        // not  b corrdination
+        Matrix3d    Rw0b = RS_[0].toRotationMatrix();
+        Quaterniond Qwb  = Quaterniond(pose_params[0]+3);
+        Matrix3d    Rwb  = Qwb.toRotationMatrix();
 
-    //     // attitude of w0 in b coordination
-    //     // attitude of w  in b coordination
-    //     Vector3d ypr0 = Rnb2ypr<double>(Rw0b.transpose());
-    //     Vector3d ypr  = Rnb2ypr<double>(Rwb.transpose() );
+        // attitude of b in w0 coordination
+        // attitude of b in w  coordination
+        Vector3d ypr0 = Rnb2ypr<double>(Rw0b);
+        Vector3d ypr  = Rnb2ypr<double>(Rwb);
 
-    //     if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
-    //         Rw0w = Rw0b*Rwb.transpose();
-    //     }
-    //     else {
-    //         // only correct 
-    //         double yw0 = ypr0.x();
-    //         double yw  = ypr.x();
+        if (abs(abs(ypr.x())-90) < 1.0 || abs(abs(ypr0.x())-90) < 1.0) {
+            Rw0w = Rw0b*Rwb.transpose();
+        }
+        else {
+            // only correct 
+            double yw0b = ypr0.x(); // b->w0
+            double ywb  = ypr.x();  // b->w
 
-    //         // rotate all w0 to w00
-    //         double diff_w = yw - yw0;               // diff between w and w0 
-    //         LOGE("[d2V] diff yaw : %lf", diff_w);
-    //         Rw0w = ypr2Rnb(Vector3d(-diff_w, 0, 0)); // w0_R_w
-    //     }
-    // }
-
-    // Vector3d Pw0b = PS_[0];
-
-    Vector3d origin_R0 = Rnb2ypr(RS_[0].toRotationMatrix());
-    Vector3d Pw0b      = PS_[0];
-
-    Vector3d origin_R00 = Rnb2ypr(Quaterniond(pose_params[0]+3).toRotationMatrix());
-    double y_diff = origin_R0.x() - origin_R00.x(); // 30 - 60
-    LOGE("[D2V] yaw diff : %lf", y_diff);
-    //TODO
-    Matrix3d Rw0w = ypr2Rnb(Vector3d(y_diff, 0, 0));
-    if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
-    {
-        // w00_R_b * b_R_w0
-        Rw0w = RS_[0] * Quaterniond(pose_params[0]+3).toRotationMatrix().transpose();
+            // yaw between w and w0
+            double yw0w = yw0b - ywb;  // w->w0
+            LOGE("[d2V] diff yaw : %lf", yw0w);   // 
+            Rw0w = ypr2Rnb(Vector3d(yw0w, 0, 0)); // w0_R_w
+        }
     }
+
+
+    // Vector3d origin_R0 = Rnb2ypr(RS_[0].toRotationMatrix());
+    // Vector3d Pw0b      = PS_[0];
+
+    // Vector3d origin_R00 = Rnb2ypr(Quaterniond(pose_params[0]+3).toRotationMatrix());
+    // double y_diff = origin_R0.x() - origin_R00.x(); // 30 - 60
+    // LOGE("[D2V] yaw diff : %lf", y_diff);
+    // //TODO
+    // Matrix3d Rw0w = ypr2Rnb(Vector3d(y_diff, 0, 0));
+    // if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
+    // {
+    //     // w00_R_b * b_R_w0
+    //     Rw0w = RS_[0] * Quaterniond(pose_params[0]+3).toRotationMatrix().transpose();
+    // }
 
     int  i = 0;
     for (i = 0; i <= FEN_WINDOW_SIZE; i++) {
