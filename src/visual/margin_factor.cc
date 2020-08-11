@@ -44,6 +44,25 @@ void ResidualBlockInfo::Evaluate() {
     }
 }
 
+MarginalizationInfo::~MarginalizationInfo() {
+    for (auto& pir : parameter_block_data_) {
+        delete(pir.second);
+    }
+    parameter_block_data_.clear();
+    parameter_block_size_.clear();
+    parameter_block_idx_.clear();
+
+    for (int i = 0; i < keep_block_data_.size(); i++) {
+        delete(keep_block_data_[i]);
+    }
+    keep_block_data_.clear();
+
+    for (int i = 0; i < factors_.size(); i++) {
+        delete(factors_[i]);
+    }
+    factors_.clear();
+}
+
 void 
 MarginalizationInfo::addResidualBlockInfo(ResidualBlockInfo *residual_block_info) {
     factors_.push_back(residual_block_info);
@@ -238,7 +257,19 @@ bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals
     Map<VectorXd> residual(residuals, n);
     residual = margin_->linear_residual_ + margin_->linear_jacobian_*dx;
 
-    
+    if (jacobians) {
+        for (int i = 0; i < margin_->keep_block_data_.size(); i++) {
+            if (jacobians[i]) {
+                int size  = margin_->keep_block_size_[i];
+                int local = margin_->localSize(size);
+                int idx   = margin_->keep_block_idx_[i]-m;
+                
+                Map<MatrixXd> jacobian(jacobians[i], n, size);
+                jacobian.setZero();
+                jacobian.leftCols(local) = margin_->linear_jacobian_.middleCols(idx, local);
+            }
+        }
+    }
 
     return true;
 }

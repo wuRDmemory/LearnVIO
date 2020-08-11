@@ -13,6 +13,7 @@
 #include "../include/initial/initial.h"
 #include "../include/visual/globalsfm.h"
 #include "../include/util/config.h"
+#include "../include/visual/margin_factor.h"
 
 using namespace std;
 using namespace cv;
@@ -53,8 +54,13 @@ public:
     double point_params[1000];
     int    point_count;
 
+    MarginalizationInfo* marginal_info_;
+
+    vector<double*> curr_keep_parameters_ptr_;
+
 public:
     Estimator();
+
     ~Estimator();
 
     void processImu(double dt, const Vector3d& accl, const Vector3d& gyro);
