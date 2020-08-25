@@ -56,8 +56,11 @@ void Estimator::clearState() {
 
     feature_manager_.clear();
 
-    FILE* fp = fopen("/home/ubuntu/catkin_ws/src/learn_vio/states.txt", "w");
-    fclose(fp);
+    marginal_info_ = nullptr;
+    curr_keep_parameters_ptr_.clear();
+
+    // FILE* fp = fopen("/home/ubuntu/catkin_ws/src/learn_vio/states.txt", "w");
+    // fclose(fp);
 }
 
 void Estimator::processImu(double dt, const Vector3d& accl, const Vector3d& gyro) {
@@ -102,6 +105,7 @@ void Estimator::processImu(double dt, const Vector3d& accl, const Vector3d& gyro
 void Estimator::processImage(double timestamp, Image_Type& image) {
     LOGI("[estimate2] ========   new image come!!!  ==========");
     margin_old_ = feature_manager_.addNewFeatures(image, frame_count_);
+    // margin_old_ = true;
     if (margin_old_) {
         LOGI("[estimate] Margin old state, build new key frame");
     } 
@@ -539,7 +543,6 @@ void Estimator::vector2double() {
 
 void Estimator::solveOptimize() {
     // get all optimate variables
-    vector2double();
 
     // ceres problem
     ceres::Problem problem;
@@ -553,8 +556,31 @@ void Estimator::solveOptimize() {
         problem.AddParameterBlock(motion_params[i], MOTION_SIZE);
     }
 
+    vector2double();
+    
     // add prior
     if (marginal_info_) {
+        // cout << "-----------------------------------------" << endl;
+        // for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        //     printf("pose_para   %d: %ld\n", i, reinterpret_cast<long>(pose_params[i]));
+        //     printf("motion_para %d: %ld\n", i, reinterpret_cast<long>(motion_params[i]));
+        // }
+        // cout << endl;
+
+        // for (const auto& it : marginal_info_->keep_block_addr_) {
+        //     printf("margin_para: %ld\n", it.first);
+        // }
+        // cout << endl;
+
+        // for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
+        //     if (marginal_info_->keep_block_addr_.count(reinterpret_cast<long>(curr_keep_parameters_ptr_[i])) == 0) {
+        //         cout << "error happend!!! " << i << endl;
+        //         assert(false);
+        //     }
+        //     printf("keep_para: %ld\n", reinterpret_cast<long>(curr_keep_parameters_ptr_[i]));
+        // }
+        // cout << endl;
+
         MarginalFactor* cost = new MarginalFactor(marginal_info_);
         problem.AddResidualBlock(cost, NULL, curr_keep_parameters_ptr_);
     }
@@ -636,9 +662,9 @@ void Estimator::solveOptimize() {
     double2vector();
 
     // TODO: marginalize
+    
     if (margin_old_) {
         vector2double();
-
         MarginalizationInfo* marginal_info = new MarginalizationInfo();
 
         // add imu constraint
@@ -647,12 +673,14 @@ void Estimator::solveOptimize() {
             ResidualBlockInfo*          res = new ResidualBlockInfo(imu_factor, NULL, 
                 vector<double*>{pose_params[0], motion_params[0], pose_params[1], motion_params[1]}, 
                 vector<int>{0, 1});
-            marginal_info_->addResidualBlockInfo(res);
+            
+            marginal_info->addResidualBlockInfo(res);
         }
         
         // add visual constraint
         {
-            int i = 0;
+            ceres::LossFunction* loss = new ceres::CauchyLoss(1);
+            int i = -1, valid_cnt = 0;
             auto& all_ftr_ = feature_manager_.all_ftr_;
             for (auto& pir : all_ftr) {
                 int   ftr_id = pir.first;
@@ -664,40 +692,38 @@ void Estimator::solveOptimize() {
                     continue;
                 }
 
+                i++;
                 if (ftr->ref_frame_id_ != 0) {
                     continue;
                 }
 
+                valid_cnt ++;
                 int ref_frame_id = 0;
                 int nex_frame_id = 1;
 
                 Vector3d ref_pt = ftr->vis_fs_[0];
                 Vector3d cur_pt = ftr->vis_fs_[1];
 
-                for (int j = 0; j < ftr->vis_fs_.size(); j++) {
+                for (int j = 1; j < ftr->vis_fs_.size(); j++) {
                     nex_frame_id = ref_frame_id + j;
                     cur_pt       = ftr->vis_fs_[j];
 
                     VisualCost* cost = new VisualCost(ref_frame_id, nex_frame_id, ref_pt, cur_pt);
-                        problem.AddResidualBlock(cost, loss, 
-                        pose_params[0], pose_params[j], &point_params[i]);
 
-                    ResidualBlockInfo* res = new ResidualBlockInfo(cost, NULL, vector<double*>{
+                    ResidualBlockInfo* res = new ResidualBlockInfo(cost, loss, vector<double*>{
                         pose_params[0], pose_params[j], &point_params[i]}, vector<int>{0, 2});
 
                     marginal_info->addResidualBlockInfo(res);
                 }
-
-                i++;
             }
 
-            LOGI("[margin old] edge number: %d", i);
+            LOGI("[margin old] point number: %d", valid_cnt);
         }
 
         {   // add old prior
             if (!curr_keep_parameters_ptr_.empty()) {
                 vector<int> drop_out;
-                for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+                for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
                     if (   curr_keep_parameters_ptr_[i] == pose_params[0] 
                         || curr_keep_parameters_ptr_[i] == motion_params[0]) {
                         drop_out.push_back(i);
@@ -706,6 +732,8 @@ void Estimator::solveOptimize() {
 
                 MarginalFactor*   cost = new MarginalFactor(marginal_info_);
                 ResidualBlockInfo* res = new ResidualBlockInfo(cost, NULL, curr_keep_parameters_ptr_, drop_out);
+
+                marginal_info->addResidualBlockInfo(res);
             }
         }
 
@@ -721,23 +749,114 @@ void Estimator::solveOptimize() {
             LOGI("[margin old] marginal cost: %lfs", tick.delta_time());
         }
 
-        if (marginal_info_) {
-            delete(marginal_info_);
-        }
-        marginal_info_ = marginal_info;
-
         // build shift parameter
         unordered_map<long, double*> shift_addr;
         for (int i = 1; i <= FEN_WINDOW_SIZE; i++) {
-            shift_addr[reinterpret_cast<long>(pose_params[i-1])]   = pose_params[i];
-            shift_addr[reinterpret_cast<long>(motion_params[i-1])] = motion_params[i];
+            shift_addr[reinterpret_cast<long>(pose_params[i])]   = pose_params[i-1];
+            shift_addr[reinterpret_cast<long>(motion_params[i])] = motion_params[i-1];
         }
 
-        curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
+        vector<double*> keep_parameters = marginal_info->getParameterBlocks(shift_addr);
+        // curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
+
+        if (marginal_info_) {
+            delete(marginal_info_);
+        }
+        marginal_info_            = marginal_info;
+        curr_keep_parameters_ptr_ = keep_parameters;
+
+        // for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        //     printf("pose_para   %d: %ld\n", i, reinterpret_cast<long>(pose_params[i]));
+        //     printf("motion_para %d: %ld\n", i, reinterpret_cast<long>(motion_params[i]));
+        // }
+        // cout << endl;
+
+        // for (const auto& it : marginal_info_->keep_block_addr_) {
+        //     printf("margin_para: %ld\n", it.first);
+        // }
+        // cout << endl;
+
+        // for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
+        //     if (marginal_info_->keep_block_addr_.count(reinterpret_cast<long>(curr_keep_parameters_ptr_[i])) == 0) {
+        //         cout << "error happend!!! " << i << endl;
+        //         assert(false);
+        //     }
+        //     printf("keep_para: %ld\n", reinterpret_cast<long>(curr_keep_parameters_ptr_[i]));
+        // }
+        // cout << endl;
     }
     else {
         // margin new
+        if (   marginal_info_ 
+            && find(curr_keep_parameters_ptr_.begin(), curr_keep_parameters_ptr_.end(), pose_params[FEN_WINDOW_SIZE-1]) != curr_keep_parameters_ptr_.end()) {
+            // if the newest frame in the margin parameters
+            
+            vector2double();
+            MarginalizationInfo* marginal_info = new MarginalizationInfo();
+            
+            if (!curr_keep_parameters_ptr_.empty()) {
+                vector<int> drop_out;
+                for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
+                    assert(curr_keep_parameters_ptr_[i] != motion_params[FEN_WINDOW_SIZE-1]);
+                    if (curr_keep_parameters_ptr_[i] == pose_params[FEN_WINDOW_SIZE-1]) {
+                        drop_out.push_back(i);
+                    }
+                }
 
+                MarginalFactor*   cost = new MarginalFactor(marginal_info_);
+                ResidualBlockInfo* res = new ResidualBlockInfo(cost, NULL, curr_keep_parameters_ptr_, drop_out);
+
+                marginal_info->addResidualBlockInfo(res);
+            }
+
+            {
+                Tick tick;
+                marginal_info->preMarginalize();
+                LOGI("[margin new] pre marginal cost: %lfs", tick.delta_time());
+            }
+            
+            {
+                Tick tick;
+                marginal_info->marginalize();
+                LOGI("[margin new] marginal cost: %lfs", tick.delta_time());
+            }
+
+            if (marginal_info_) {
+                delete(marginal_info_);
+            }
+            marginal_info_ = marginal_info;
+
+            // build shift parameter
+            unordered_map<long, double*> shift_addr;
+            for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+                if (i == FEN_WINDOW_SIZE-1) {
+                    continue;
+                }
+
+                if (i == FEN_WINDOW_SIZE) {
+                    shift_addr[reinterpret_cast<long>(pose_params[i])]   = pose_params[i-1];
+                    shift_addr[reinterpret_cast<long>(motion_params[i])] = motion_params[i-1];
+                }
+                else {
+                    shift_addr[reinterpret_cast<long>(pose_params[i])]   = pose_params[i];
+                    shift_addr[reinterpret_cast<long>(motion_params[i])] = motion_params[i];
+                }
+            }
+
+            curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
+
+
+        }
+
+        // for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
+        //     printf("pose_para   %d: %ld\n", i, reinterpret_cast<long>(pose_params[i]));
+        //     printf("motion_para %d: %ld\n", i, reinterpret_cast<long>(motion_params[i]));
+        // }
+
+        // for (const auto& it : marginal_info_->keep_block_addr_) {
+        //     printf("margin_para: %ld\n", it.first);
+        // }
+        // cout << endl;
     }
 
     // {

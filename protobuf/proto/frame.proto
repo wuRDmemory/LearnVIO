@@ -6,7 +6,9 @@ import "math.proto";
 
 message Estimator {
     repeated PbMath.Quaternion RS = 1;
-    repeated PbMath.Quaternion PS = 2;
-    repeated PbMath.Quaternion VS = 3;
+    repeated PbMath.vector3    PS = 2;
+    repeated PbMath.vector3    VS = 3;
+    repeated PbMath.vector3    BAS = 4;
+    repeated PbMath.vector3    BGS = 5;
     
 }

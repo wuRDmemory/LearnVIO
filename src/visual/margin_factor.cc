@@ -1,19 +1,19 @@
 #include "../../include/visual/margin_factor.h"
+#include "../../include/util/log.h"
 
 void ResidualBlockInfo::Evaluate() {
     residuals_.resize(cost_function_->num_residuals());
     vector<int> parameter_size = cost_function_->parameter_block_sizes();
 
     jacobians_.resize(parameter_size.size());
-    double** raw_jacobians = new double*[parameter_size.size()];
+    raw_jacobians_ = new double*[parameter_size.size()];
 
     for (int i = 0; i < parameter_size.size(); i++) {
         jacobians_[i].resize(residuals_.size(), parameter_size[i]);
-        raw_jacobians[i] = jacobians_[i].data();
+        raw_jacobians_[i] = jacobians_[i].data();
     }
 
-    double* residual = residuals_.data();
-    cost_function_->Evaluate(parameter_blocks_.data(), residuals_.data(), raw_jacobians);
+    cost_function_->Evaluate(parameter_blocks_.data(), residuals_.data(), raw_jacobians_);
 
     if (loss_function_)
     {
@@ -45,39 +45,52 @@ void ResidualBlockInfo::Evaluate() {
 }
 
 MarginalizationInfo::~MarginalizationInfo() {
-    for (auto& pir : parameter_block_data_) {
-        delete(pir.second);
-    }
-    parameter_block_data_.clear();
-    parameter_block_size_.clear();
-    parameter_block_idx_.clear();
+    // for (auto& pir : parameter_block_data_) {
+    //     delete(pir.second);
+    // }
 
-    for (int i = 0; i < keep_block_data_.size(); i++) {
-        delete(keep_block_data_[i]);
-    }
-    keep_block_data_.clear();
+    // parameter_block_data_.clear();
+    // parameter_block_size_.clear();
+    // parameter_block_idx_.clear();
+    // keep_block_data_.clear();
+    // keep_block_idx_.clear();
+    // keep_block_size_.clear();
 
-    for (int i = 0; i < factors_.size(); i++) {
-        delete(factors_[i]);
+    // for (int i = 0; i < factors_.size(); i++) {
+    //     delete(factors_[i]);
+    // }
+    // factors_.clear();
+    for (auto it = parameter_block_data_.begin(); it != parameter_block_data_.end(); ++it)
+        delete[] it->second;
+
+    for (int i = 0; i < (int)factors_.size(); i++)
+    {
+
+        delete[] factors_[i]->raw_jacobians_;
+        
+        delete factors_[i]->cost_function_;
+
+        delete factors_[i];
     }
-    factors_.clear();
 }
 
 void 
 MarginalizationInfo::addResidualBlockInfo(ResidualBlockInfo *residual_block_info) {
     factors_.push_back(residual_block_info);
 
-    auto& parameter_block      = residual_block_info->parameter_blocks_;
-    auto& parameter_block_size = residual_block_info->cost_function_->parameter_block_sizes();
-    auto& drop_out             = residual_block_info->drop_set_;
+    const vector<double*>& parameter_block      = residual_block_info->parameter_blocks_;
+    const vector<int>&     parameter_block_size = residual_block_info->cost_function_->parameter_block_sizes();
+    const vector<int>&     drop_out             = residual_block_info->drop_set_;
 
     for (int i = 0; i < parameter_block.size(); i++) {
         parameter_block_size_[reinterpret_cast<long>(parameter_block[i])] = parameter_block_size[i];
     } 
 
     for (int i = 0; i < drop_out.size(); i++) {
-        parameter_block_idx_[reinterpret_cast<long>(parameter_block[i])] = 0;
-    }    
+        int idx = drop_out[i];
+        parameter_block_idx_[reinterpret_cast<long>(parameter_block[idx])] = 0;
+    }
+    // cout << "iter output: " << parameter_block_idx_.size() << endl;
 }
 
 void 
@@ -100,34 +113,32 @@ MarginalizationInfo::preMarginalize() {
 
 void 
 MarginalizationInfo::marginalize() {
+    int pose = 0;
     for (auto& pir : parameter_block_idx_) {
-        long addr = pir.first;
-        parameter_block_idx_[addr] = m_;
-        
-        m_ +=  localSize(parameter_block_size_[addr]);
+        pir.second = pose;
+        pose +=  localSize(parameter_block_size_[pir.first]);
     }
 
-    n_ = m_;
-    for (auto& pir : parameter_block_size_) {
+    m_ = pose;
+    for (const auto& pir : parameter_block_size_) {
         long addr = pir.first;
-        if (!parameter_block_idx_.count(addr)) {
-            parameter_block_idx_[addr] = n_;
-            n_ += localSize(pir.second);
+        if (parameter_block_idx_.find(addr) == parameter_block_idx_.end()) {
+            parameter_block_idx_[addr] = pose;
+            pose += localSize(pir.second);
         }
     }
-    sum_block_size_ = n_;
-    n_ -= m_;
+    n_ = pose-m_;
 
     MatrixXd H;
     VectorXd b;
 
-    H.resize(sum_block_size_, sum_block_size_);
-    b.resize(sum_block_size_);
+    H.resize(pose, pose);
+    b.resize(pose);
 
     H.setZero();
     b.setZero();
 
-    for (auto& it : factors_) {
+    for (auto it : factors_) {
         auto& parameter_block = it->parameter_blocks_;
         auto& parameter_size  = it->cost_function_->parameter_block_sizes();
         
@@ -135,10 +146,10 @@ MarginalizationInfo::marginalize() {
         for (int i = 0; i < N; i++) {
             long addr_i = reinterpret_cast<long>(parameter_block[i]);
             int  size_i = localSize(parameter_size[i]);
-            int  idx_i  = parameter_block_idx_[i];
+            int  idx_i  = parameter_block_idx_[addr_i];
 
             VectorXd r_i = it->residuals_;
-            MatrixXd J_i = it->jacobians_[i].topLeftCorner(size_i, size_i);
+            MatrixXd J_i = it->jacobians_[i].leftCols(size_i);
             for (int j = i; j < N; j++) {
                 if (j == i) {
                     H.block(idx_i, idx_i, size_i, size_i) += J_i.transpose()*J_i;
@@ -146,19 +157,27 @@ MarginalizationInfo::marginalize() {
                 else {
                     long addr_j = reinterpret_cast<long>(parameter_block[j]);
                     int  size_j = localSize(parameter_size[j]);
-                    int  idx_j  = parameter_block_idx_[j];
+                    int  idx_j  = parameter_block_idx_[addr_j];
 
-                    MatrixXd J_j = it->jacobians_[j].topLeftCorner(size_j, size_j);
+                    MatrixXd J_j = it->jacobians_[j].leftCols(size_j);
 
                     H.block(idx_i, idx_j, size_i, size_j) += J_i.transpose()*J_j;
-                    H.block(idx_j, idx_i, size_i, size_j) += H.block(idx_i, idx_j, size_i, size_j);
-
+                    H.block(idx_j, idx_i, size_j, size_i)  = H.block(idx_i, idx_j, size_i, size_j).transpose();
                 }
             }
 
             b.segment(idx_i, size_i) += J_i.transpose()*r_i;
         }
     }
+
+    // FILE* fp = fopen("/home/ubuntu/Hmatrix.csv", "w");
+    // for (int i = 0; i < sum_block_size_; i++) {
+    //     for (int j = 0; j < sum_block_size_; j++) {
+    //         fprintf(fp, "%lf,", H(i, j));
+    //     }
+    //     fprintf(fp, "\n");
+    // }
+    // fclose(fp);
 
     // shur complememt
     MatrixXd Hmm = 0.5 * (H.block(0, 0, m_, m_) + H.block(0, 0, m_, m_).transpose());
@@ -200,10 +219,13 @@ MarginalizationInfo::getParameterBlocks(unordered_map<long, double *> &addr_shif
             keep_block_size_.push_back(parameter_block_size_[it.first]);
             keep_block_idx_.push_back( parameter_block_idx_[it.first]);
             keep_block_data_.push_back(parameter_block_data_[it.first]);
+            keep_block_addr_[reinterpret_cast<long>(addr_shift[it.first])] = reinterpret_cast<long>(parameter_block_data_[it.first]);
             keep_block_addr.push_back( addr_shift[it.first]);
         }
     }
-    // sum_block_size = std::accumulate(std::begin(keep_block_size), std::end(keep_block_size), 0);
+
+    sum_block_size_ = std::accumulate(begin(keep_block_size_), end(keep_block_size_), 0);
+    LOGE("[shift] keep parameter block: %d", sum_block_size_);
 
     return keep_block_addr;   
 }
@@ -218,21 +240,37 @@ MarginalizationInfo::globalSize(int size) const {
     return size == 6 ? 7 : size;
 }
 
+FILE* file = fopen("/home/ubuntu/log.csv", "w");
 
 MarginalFactor::MarginalFactor(MarginalizationInfo* margin) :
     margin_(margin) {
     set_num_residuals(margin->n_);
+    int cnt = 0;
     for (int it : margin_->keep_block_size_) {
         mutable_parameter_block_sizes()->push_back(it);
+        cnt += it;
     }
+    LOGE("[margin factor] parameter block size: %d(%d|%d)", cnt, margin_->sum_block_size_, margin_->n_);
 }
 
-bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {
+bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals, double** jacobians) const {    
     int m = margin_->m_;
     int n = margin_->n_;
-    
+
+    // for (int i = 0; i < margin_->keep_block_size_.size(); i++) {
+    //     const int   size = margin_->keep_block_size_[i];
+    //     Map<VectorXd>       x0(margin_->keep_block_data_[i], size);
+    //     Map<const VectorXd> x( parameters[i], size);
+
+    //     cout << "i: " << i << "   " << x0.transpose() << endl;
+    //     cout << "i: " << i << "   " << x.transpose()  << endl << endl;
+    // }
+
+    // assert(false);
+
     VectorXd dx(n);
     for (int i = 0; i < margin_->keep_block_size_.size(); i++) {
+
         const int   size = margin_->keep_block_size_[i];
         const int    idx = margin_->keep_block_idx_[i]-m;
         Map<VectorXd>       x0(margin_->keep_block_data_[i], size);
@@ -240,9 +278,9 @@ bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals
         
         if (size != 7) {
             dx.segment(idx, size) = x - x0;
-        } 
+        }
         else {            
-            dx.segment(idx, 3) = x.segment(0, 3) - x0.segment(0, 3);
+            dx.segment(idx, 3) = x.head<3>() - x0.head<3>();
 
             Map<Quaterniond>       q0(margin_->keep_block_data_[i]+3);
             Map<const Quaterniond> q( parameters[i]+3);
@@ -254,8 +292,17 @@ bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals
         }
     }
 
-    Map<VectorXd> residual(residuals, n);
-    residual = margin_->linear_residual_ + margin_->linear_jacobian_*dx;
+    // for (int i = 0; i < n; i++) {
+    //     fprintf(file, "%lf,", dx(0));
+    // }
+    // fprintf(file, "\n");
+
+    // Map<VectorXd> residual(residuals, n);
+    // residual = margin_->linear_residual_ + margin_->linear_jacobian_*dx;
+    // for (int i = 0; i < n; i++) {
+    //     fprintf(file, "%lf,", residuals[0]);
+    // }
+    // fprintf(file, "\n\n");
 
     if (jacobians) {
         for (int i = 0; i < margin_->keep_block_data_.size(); i++) {
@@ -264,7 +311,7 @@ bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals
                 int local = margin_->localSize(size);
                 int idx   = margin_->keep_block_idx_[i]-m;
                 
-                Map<MatrixXd> jacobian(jacobians[i], n, size);
+                Map<Matrix<double, Dynamic, Dynamic, RowMajor>> jacobian(jacobians[i], n, size);
                 jacobian.setZero();
                 jacobian.leftCols(local) = margin_->linear_jacobian_.middleCols(idx, local);
             }

@@ -87,8 +87,8 @@ list(APPEND ALL_LIBS
 # compile options
 add_definitions(-DUSE_ROS)
 
-add_executable(feature_track_node feature_track_node.cc ${ALL_SOURCE})
-target_link_libraries(feature_track_node ${ALL_LIBS})
+# add_executable(feature_track_node feature_track_node.cc ${ALL_SOURCE})
+# target_link_libraries(feature_track_node ${ALL_LIBS})
 
 add_executable(front_end_node front_end_node.cc ${ALL_SOURCE})
 target_link_libraries(front_end_node ${ALL_LIBS})

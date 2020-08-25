@@ -26,6 +26,7 @@ struct ResidualBlockInfo
     std::vector<double *> parameter_blocks_;
     std::vector<int>      drop_set_;
 
+    double **raw_jacobians_;
     vector<MatrixXd> jacobians_;
     VectorXd         residuals_;
 
@@ -55,6 +56,7 @@ public:
     unordered_map<long, int>      parameter_block_size_;
     unordered_map<long, double *> parameter_block_data_;
     unordered_map<long, int>      parameter_block_idx_;
+    unordered_map<long, long>     keep_block_addr_;
 
     vector<int>      keep_block_size_;
     vector<int>      keep_block_idx_ ;
