@@ -172,3 +172,5 @@ void cvtPoseFromCameraToBody(const Matrix<T, 3, 3> &Rwc, const Matrix<T, 3, 1> &
     // w_P_b = w_P_c - w_R_b * b_P_c
     twb = twc - Rwb*tbc;
 }
+
+void printMatrix(string save_path, const Matrix<double, Dynamic, Dynamic, RowMajor>& matrix, int rows, int cols);

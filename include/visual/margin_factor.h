@@ -39,13 +39,15 @@ class MarginalizationInfo {
 public:
     ~MarginalizationInfo();
 
-    int localSize(int size) const;
+    int localSize(int size)  const;
     int globalSize(int size) const;
     
     void addResidualBlockInfo(ResidualBlockInfo *residual_block_info);
     
     void preMarginalize();
     void marginalize();
+    
+    bool check(MatrixXd& result_H, VectorXd& result_b) const;
     
     vector<double*> 
     getParameterBlocks(unordered_map<long, double *> &addr_shift);
@@ -77,4 +79,5 @@ public:
     MarginalFactor(MarginalizationInfo* margin);
 
     bool Evaluate(double const* const* parameters, double* residuals, double** jacobians) const; 
+
 };

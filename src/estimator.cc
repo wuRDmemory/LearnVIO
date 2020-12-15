@@ -662,19 +662,37 @@ void Estimator::solveOptimize() {
     double2vector();
 
     // TODO: marginalize
-    
     if (margin_old_) {
         vector2double();
         MarginalizationInfo* marginal_info = new MarginalizationInfo();
 
+        // add old prior
+        if (marginal_info_) {
+            vector<int> drop_out;
+            for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
+                if (   curr_keep_parameters_ptr_[i] == pose_params[0] 
+                    || curr_keep_parameters_ptr_[i] == motion_params[0]) {
+                    drop_out.push_back(i);
+                }
+            }
+
+            MarginalFactor*   cost = new MarginalFactor(marginal_info_);
+            ResidualBlockInfo* res = new ResidualBlockInfo(cost, NULL, curr_keep_parameters_ptr_, drop_out);
+
+            marginal_info->addResidualBlockInfo(res);
+        }
+
         // add imu constraint
-        {  
+        if (preintegrates_[1]->sum_dt_ < 10.0f) {  
             ceres::CostFunction* imu_factor = new Inertial_Factor(0, 1, preintegrates_[1]);
             ResidualBlockInfo*          res = new ResidualBlockInfo(imu_factor, NULL, 
                 vector<double*>{pose_params[0], motion_params[0], pose_params[1], motion_params[1]}, 
                 vector<int>{0, 1});
             
             marginal_info->addResidualBlockInfo(res);
+        } 
+        else {
+            assert(false);
         }
         
         // add visual constraint
@@ -720,23 +738,6 @@ void Estimator::solveOptimize() {
             LOGI("[margin old] point number: %d", valid_cnt);
         }
 
-        {   // add old prior
-            if (!curr_keep_parameters_ptr_.empty()) {
-                vector<int> drop_out;
-                for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
-                    if (   curr_keep_parameters_ptr_[i] == pose_params[0] 
-                        || curr_keep_parameters_ptr_[i] == motion_params[0]) {
-                        drop_out.push_back(i);
-                    }
-                }
-
-                MarginalFactor*   cost = new MarginalFactor(marginal_info_);
-                ResidualBlockInfo* res = new ResidualBlockInfo(cost, NULL, curr_keep_parameters_ptr_, drop_out);
-
-                marginal_info->addResidualBlockInfo(res);
-            }
-        }
-
         {
             Tick tick;
             marginal_info->preMarginalize();
@@ -756,34 +757,12 @@ void Estimator::solveOptimize() {
             shift_addr[reinterpret_cast<long>(motion_params[i])] = motion_params[i-1];
         }
 
-        vector<double*> keep_parameters = marginal_info->getParameterBlocks(shift_addr);
-        // curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
-
         if (marginal_info_) {
             delete(marginal_info_);
         }
-        marginal_info_            = marginal_info;
-        curr_keep_parameters_ptr_ = keep_parameters;
-
-        // for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {
-        //     printf("pose_para   %d: %ld\n", i, reinterpret_cast<long>(pose_params[i]));
-        //     printf("motion_para %d: %ld\n", i, reinterpret_cast<long>(motion_params[i]));
-        // }
-        // cout << endl;
-
-        // for (const auto& it : marginal_info_->keep_block_addr_) {
-        //     printf("margin_para: %ld\n", it.first);
-        // }
-        // cout << endl;
-
-        // for (int i = 0; i < curr_keep_parameters_ptr_.size(); i++) {
-        //     if (marginal_info_->keep_block_addr_.count(reinterpret_cast<long>(curr_keep_parameters_ptr_[i])) == 0) {
-        //         cout << "error happend!!! " << i << endl;
-        //         assert(false);
-        //     }
-        //     printf("keep_para: %ld\n", reinterpret_cast<long>(curr_keep_parameters_ptr_[i]));
-        // }
-        // cout << endl;
+        marginal_info_ = marginal_info;
+    
+        curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
     }
     else {
         // margin new
@@ -844,8 +823,6 @@ void Estimator::solveOptimize() {
             }
 
             curr_keep_parameters_ptr_ = marginal_info_->getParameterBlocks(shift_addr);
-
-
         }
 
         // for (int i = 0; i <= FEN_WINDOW_SIZE; i++) {

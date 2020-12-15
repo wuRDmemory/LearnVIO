@@ -1,5 +1,6 @@
 #include "../../include/visual/margin_factor.h"
 #include "../../include/util/log.h"
+#include "../../include/util/utils.h"
 
 void ResidualBlockInfo::Evaluate() {
     residuals_.resize(cost_function_->num_residuals());
@@ -45,31 +46,13 @@ void ResidualBlockInfo::Evaluate() {
 }
 
 MarginalizationInfo::~MarginalizationInfo() {
-    // for (auto& pir : parameter_block_data_) {
-    //     delete(pir.second);
-    // }
 
-    // parameter_block_data_.clear();
-    // parameter_block_size_.clear();
-    // parameter_block_idx_.clear();
-    // keep_block_data_.clear();
-    // keep_block_idx_.clear();
-    // keep_block_size_.clear();
-
-    // for (int i = 0; i < factors_.size(); i++) {
-    //     delete(factors_[i]);
-    // }
-    // factors_.clear();
     for (auto it = parameter_block_data_.begin(); it != parameter_block_data_.end(); ++it)
         delete[] it->second;
 
-    for (int i = 0; i < (int)factors_.size(); i++)
-    {
-
+    for (int i = 0; i < (int)factors_.size(); i++) {
         delete[] factors_[i]->raw_jacobians_;
-        
         delete factors_[i]->cost_function_;
-
         delete factors_[i];
     }
 }
@@ -98,7 +81,7 @@ MarginalizationInfo::preMarginalize() {
     for (auto it : factors_) {
         it->Evaluate();
 
-        vector<int> block_sizes = it->cost_function_->parameter_block_sizes();
+        const vector<int>& block_sizes = it->cost_function_->parameter_block_sizes();
         for (int i = 0; i < static_cast<int>(block_sizes.size()); i++) {
             long addr = reinterpret_cast<long>(it->parameter_blocks_[i]);
             int size = block_sizes[i];
@@ -170,14 +153,8 @@ MarginalizationInfo::marginalize() {
         }
     }
 
-    // FILE* fp = fopen("/home/ubuntu/Hmatrix.csv", "w");
-    // for (int i = 0; i < sum_block_size_; i++) {
-    //     for (int j = 0; j < sum_block_size_; j++) {
-    //         fprintf(fp, "%lf,", H(i, j));
-    //     }
-    //     fprintf(fp, "\n");
-    // }
-    // fclose(fp);
+    // printMatrix("/home/ubuntu/catkin_ws/src/learn_vio/output/Hmatrix.csv", H, pose, pose);
+    // printMatrix("/home/ubuntu/catkin_ws/src/learn_vio/output/bmatrix.csv", b, pose, 1);
 
     // shur complememt
     MatrixXd Hmm = 0.5 * (H.block(0, 0, m_, m_) + H.block(0, 0, m_, m_).transpose());
@@ -191,10 +168,10 @@ MarginalizationInfo::marginalize() {
     Eigen::MatrixXd Hrr = H.block(m_, m_, n_, n_);
     Eigen::VectorXd brr = b.segment(m_, n_);
     
-    H = Hrr - Hrm * Hmm_inv * Hmr;
-    b = brr - Hrm * Hmm_inv * bmm; 
+    MatrixXd Ht = Hrr - Hrm * Hmm_inv * Hmr;
+    MatrixXd bt = brr - Hrm * Hmm_inv * bmm; 
 
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> saes2(H);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> saes2(Ht);
     VectorXd S     = VectorXd((saes2.eigenvalues().array() > eps).select(saes2.eigenvalues().array(), 0));
     VectorXd S_inv = VectorXd((saes2.eigenvalues().array() > eps).select(saes2.eigenvalues().array().inverse(), 0));
 
@@ -202,7 +179,15 @@ MarginalizationInfo::marginalize() {
     VectorXd S_inv_sqrt = S_inv.cwiseSqrt();
 
     linear_jacobian_ = S_sqrt.asDiagonal()    *saes2.eigenvectors().transpose();
-    linear_residual_ = S_inv_sqrt.asDiagonal()*saes2.eigenvectors().transpose()*b;
+    linear_residual_ = S_inv_sqrt.asDiagonal()*saes2.eigenvectors().transpose()*bt;
+
+    // printMatrix("/home/ubuntu/catkin_ws/src/learn_vio/output/Jmatrix.csv", linear_jacobian_, n_, n_);
+    // printMatrix("/home/ubuntu/catkin_ws/src/learn_vio/output/ematrix.csv", linear_residual_, n_, 1);
+}
+
+
+bool MarginalizationInfo::check(MatrixXd& result_H, VectorXd& result_b) const {
+
 }
 
 vector<double*>
@@ -240,7 +225,6 @@ MarginalizationInfo::globalSize(int size) const {
     return size == 6 ? 7 : size;
 }
 
-FILE* file = fopen("/home/ubuntu/log.csv", "w");
 
 MarginalFactor::MarginalFactor(MarginalizationInfo* margin) :
     margin_(margin) {
@@ -297,8 +281,8 @@ bool MarginalFactor::Evaluate(double const* const* parameters, double* residuals
     // }
     // fprintf(file, "\n");
 
-    // Map<VectorXd> residual(residuals, n);
-    // residual = margin_->linear_residual_ + margin_->linear_jacobian_*dx;
+    Map<VectorXd> residual(residuals, n);
+    residual = margin_->linear_residual_ + margin_->linear_jacobian_*dx;
     // for (int i = 0; i < n; i++) {
     //     fprintf(file, "%lf,", residuals[0]);
     // }
